@@ -33,7 +33,7 @@ console.log('📊 DATABASE_URL:', DATABASE_URL.replace(/:[^:]*@/, ':****@'));
 const pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 20,
+    max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000
 });
@@ -42,10 +42,9 @@ const ADMIN_ID = 7011476249;
 let dbReady = false;
 
 // ================================================================
-//                      ===== تعريف الجداول =====
+//                      ===== جداول العجلة (كما هي) =====
 // ================================================================
-
-const WHEEL_TABLES = {
+const TABLE_SCHEMAS = {
     wheel_prizes: `
         CREATE TABLE IF NOT EXISTS wheel_prizes (
             id SERIAL PRIMARY KEY,
@@ -79,6 +78,43 @@ const WHEEL_TABLES = {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     `,
+    payments_log: `
+        CREATE TABLE IF NOT EXISTS payments_log (
+            id SERIAL PRIMARY KEY,
+            payment_id VARCHAR(50) UNIQUE,
+            user_id VARCHAR(50) NOT NULL,
+            user_username VARCHAR(100),
+            user_full_name VARCHAR(200),
+            amount DECIMAL(20,2) NOT NULL,
+            method VARCHAR(50) NOT NULL,
+            method_type VARCHAR(20) DEFAULT 'auto',
+            transaction_id VARCHAR(100),
+            bonus_amount DECIMAL(20,2) DEFAULT 0,
+            bonus_percent DECIMAL(5,2) DEFAULT 0,
+            final_amount DECIMAL(20,2) NOT NULL,
+            old_balance DECIMAL(20,2) DEFAULT 0,
+            new_balance DECIMAL(20,2) DEFAULT 0,
+            exchange_rate DECIMAL(10,4) DEFAULT 1.0,
+            commission_amount DECIMAL(20,2) DEFAULT 0,
+            referrer_id VARCHAR(50),
+            ichancy_username VARCHAR(100),
+            ichancy_player_id VARCHAR(50),
+            status VARCHAR(20) DEFAULT 'completed',
+            payment_time TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            log_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `,
+    payments_stats: `
+        CREATE TABLE IF NOT EXISTS payments_stats (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(50) UNIQUE,
+            total_payments INTEGER DEFAULT 0,
+            total_amount DECIMAL(20,2) DEFAULT 0,
+            last_payment_time TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `,
     wheel_banner: `
         CREATE TABLE IF NOT EXISTS wheel_banner (
             id SERIAL PRIMARY KEY,
@@ -88,6 +124,9 @@ const WHEEL_TABLES = {
     `
 };
 
+// ================================================================
+//                      ===== جداول SPINIX =====
+// ================================================================
 const SPINIX_TABLES = {
     spinix_games: `
         CREATE TABLE IF NOT EXISTS spinix_games (
@@ -177,46 +216,6 @@ const SPINIX_TABLES = {
     `
 };
 
-const PAYMENT_TABLES = {
-    payments_log: `
-        CREATE TABLE IF NOT EXISTS payments_log (
-            id SERIAL PRIMARY KEY,
-            payment_id VARCHAR(50) UNIQUE,
-            user_id VARCHAR(50) NOT NULL,
-            user_username VARCHAR(100),
-            user_full_name VARCHAR(200),
-            amount DECIMAL(20,2) NOT NULL,
-            method VARCHAR(50) NOT NULL,
-            method_type VARCHAR(20) DEFAULT 'auto',
-            transaction_id VARCHAR(100),
-            bonus_amount DECIMAL(20,2) DEFAULT 0,
-            bonus_percent DECIMAL(5,2) DEFAULT 0,
-            final_amount DECIMAL(20,2) NOT NULL,
-            old_balance DECIMAL(20,2) DEFAULT 0,
-            new_balance DECIMAL(20,2) DEFAULT 0,
-            exchange_rate DECIMAL(10,4) DEFAULT 1.0,
-            commission_amount DECIMAL(20,2) DEFAULT 0,
-            referrer_id VARCHAR(50),
-            ichancy_username VARCHAR(100),
-            ichancy_player_id VARCHAR(50),
-            status VARCHAR(20) DEFAULT 'completed',
-            payment_time TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            log_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    `,
-    payments_stats: `
-        CREATE TABLE IF NOT EXISTS payments_stats (
-            id SERIAL PRIMARY KEY,
-            user_id VARCHAR(50) UNIQUE,
-            total_payments INTEGER DEFAULT 0,
-            total_amount DECIMAL(20,2) DEFAULT 0,
-            last_payment_time TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    `
-};
-
 // ================================================================
 //                      ===== البيانات الافتراضية =====
 // ================================================================
@@ -230,7 +229,7 @@ const DEFAULT_PRIZES = [
     { name: '⭐ 50 SYP', description: 'الفوز بـ 50 ليرة سورية', probability: 5, icon: '⭐', color: '#1a1a2a', color2: '#0f0f2a' }
 ];
 
-const DEFAULT_WHEEL_SETTINGS = [
+const DEFAULT_SETTINGS = [
     { key: 'spin_interval_hours', value: '24' },
     { key: 'is_active', value: 'true' },
     { key: 'deposit_required', value: 'false' },
@@ -268,16 +267,71 @@ const DEFAULT_SPINIX_MULTIPLIERS = {
 };
 
 // ================================================================
-//                      ===== دوال مساعدة =====
+//                      ===== دوال مساعدة للعجلة (كما هي) =====
 // ================================================================
 
-async function getWheelSetting(key) {
-    const result = await pool.query(
-        'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
-        [key]
-    );
-    return result.rows[0]?.setting_value;
+async function updateTableSchema() {
+    const client = await pool.connect();
+    try {
+        console.log('📋 ===== التحقق من هيكل الجداول =====');
+        
+        const checkColumns = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'wheel_prizes' 
+            AND column_name IN ('color', 'color2')
+        `);
+        
+        const existingColumns = checkColumns.rows.map(row => row.column_name);
+        console.log('📋 الأعمدة الموجودة:', existingColumns);
+        
+        if (!existingColumns.includes('color')) {
+            console.log('➕ إضافة عمود color...');
+            await client.query(`
+                ALTER TABLE wheel_prizes 
+                ADD COLUMN color VARCHAR(50) DEFAULT '#1a1a2e'
+            `);
+            console.log('✅ تم إضافة عمود color');
+        }
+        
+        if (!existingColumns.includes('color2')) {
+            console.log('➕ إضافة عمود color2...');
+            await client.query(`
+                ALTER TABLE wheel_prizes 
+                ADD COLUMN color2 VARCHAR(50) DEFAULT '#16213e'
+            `);
+            console.log('✅ تم إضافة عمود color2');
+        }
+        
+        const checkUpdatedAt = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'wheel_prizes' 
+            AND column_name = 'updated_at'
+        `);
+        
+        if (checkUpdatedAt.rows.length === 0) {
+            console.log('➕ إضافة عمود updated_at...');
+            await client.query(`
+                ALTER TABLE wheel_prizes 
+                ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            `);
+            console.log('✅ تم إضافة عمود updated_at');
+        }
+        
+        console.log('✅ ===== هيكل الجدول محدث =====');
+        return true;
+    } catch (error) {
+        console.error('❌ خطأ في تحديث هيكل الجدول:', error);
+        return false;
+    } finally {
+        client.release();
+    }
 }
+
+// ================================================================
+//                      ===== دوال مساعدة لـ SPINIX =====
+// ================================================================
 
 async function getSpinixSetting(key) {
     const result = await pool.query(
@@ -293,40 +347,6 @@ async function getSpinixMultiplier(floor) {
         [`multiplier_${floor}`]
     );
     return parseFloat(result.rows[0]?.setting_value || 0);
-}
-
-async function checkWheelDepositRequirement(user_id) {
-    const depositRequired = await getWheelSetting('deposit_required');
-    const isDepositRequired = depositRequired === 'true';
-
-    if (!isDepositRequired) {
-        return { canPlay: true, required: false };
-    }
-
-    const minAmount = parseFloat(await getWheelSetting('deposit_min_amount') || 1000);
-    const checkHours = parseInt(await getWheelSetting('deposit_check_hours') || 24);
-
-    const userDeposits = await pool.query(`
-        SELECT COALESCE(SUM(final_amount), 0) as total
-        FROM payments_log
-        WHERE user_id = $1 
-        AND status = 'completed'
-        AND payment_time >= NOW() - INTERVAL '${checkHours} hours'
-    `, [user_id]);
-
-    const totalDeposits = parseFloat(userDeposits.rows[0]?.total || 0);
-    const isMet = totalDeposits >= minAmount;
-
-    return {
-        canPlay: isMet,
-        required: true,
-        reason: isMet ? '' : `مطلوب إيداع ${minAmount} SYP خلال آخر ${checkHours} ساعة`,
-        min_amount: minAmount,
-        check_hours: checkHours,
-        current_deposits: totalDeposits,
-        is_met: isMet,
-        remaining: isMet ? 0 : minAmount - totalDeposits
-    };
 }
 
 async function checkSpinixDepositRequirement(user_id) {
@@ -422,8 +442,6 @@ async function updateAggregatedStats(periodType, gamesCount, betAmount, wins, wi
     } else if (periodType === 'weekly') {
         const weekNum = getWeekNumber(now);
         periodKey = `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-    } else if (periodType === 'monthly') {
-        periodKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     }
 
     await pool.query(`
@@ -498,42 +516,19 @@ async function ensureTables() {
 
     try {
         // 1. إنشاء جداول العجلة
-        for (const table of Object.keys(WHEEL_TABLES)) {
+        for (const table of Object.keys(TABLE_SCHEMAS)) {
             try {
-                await client.query(WHEEL_TABLES[table]);
+                await client.query(TABLE_SCHEMAS[table]);
                 console.log(`   ✅ جدول ${table}: تم إنشاؤه/تأكيده`);
             } catch (err) {
                 console.log(`   ❌ جدول ${table}: فشل - ${err.message}`);
                 return false;
             }
         }
+        
+        await updateTableSchema();
 
-        // 2. إنشاء جداول SPINIX
-        for (const table of Object.keys(SPINIX_TABLES)) {
-            try {
-                await client.query(SPINIX_TABLES[table]);
-                console.log(`   ✅ جدول ${table}: تم إنشاؤه/تأكيده`);
-            } catch (err) {
-                console.log(`   ❌ جدول ${table}: فشل - ${err.message}`);
-                return false;
-            }
-        }
-
-        // 3. إنشاء جداول المدفوعات
-        for (const table of Object.keys(PAYMENT_TABLES)) {
-            try {
-                await client.query(PAYMENT_TABLES[table]);
-                console.log(`   ✅ جدول ${table}: تم إنشاؤه/تأكيده`);
-            } catch (err) {
-                console.log(`   ❌ جدول ${table}: فشل - ${err.message}`);
-                return false;
-            }
-        }
-
-        // 4. تحديث هيكل wheel_prizes
-        await updateWheelTableSchema(client);
-
-        // 5. إضافة الجوائز الافتراضية للعجلة
+        // 2. إضافة الجوائز الافتراضية للعجلة
         const prizesCount = await client.query('SELECT COUNT(*) FROM wheel_prizes');
         if (parseInt(prizesCount.rows[0].count) === 0) {
             console.log('   ⚠️ لا توجد جوائز، جاري إضافة الجوائز الافتراضية...');
@@ -544,22 +539,53 @@ async function ensureTables() {
                 `, [prize.name, prize.description, prize.probability, prize.icon, prize.color, prize.color2]);
             }
             console.log(`   ✅ تم إضافة ${DEFAULT_PRIZES.length} جائزة افتراضية`);
+        } else {
+            console.log('   🔄 تحديث الجوائز الموجودة بالألوان الافتراضية...');
+            await client.query(`
+                UPDATE wheel_prizes 
+                SET color = COALESCE(color, '#1a1a2e'),
+                    color2 = COALESCE(color2, '#16213e')
+                WHERE color IS NULL OR color2 IS NULL
+            `);
         }
 
-        // 6. إضافة إعدادات العجلة الافتراضية
-        const wheelSettingsCount = await client.query('SELECT COUNT(*) FROM wheel_settings');
-        if (parseInt(wheelSettingsCount.rows[0].count) === 0) {
-            console.log('   ⚠️ لا توجد إعدادات للعجلة، جاري الإضافة...');
-            for (const setting of DEFAULT_WHEEL_SETTINGS) {
+        // 3. إضافة إعدادات العجلة الافتراضية
+        const settingsCount = await client.query('SELECT COUNT(*) FROM wheel_settings');
+        if (parseInt(settingsCount.rows[0].count) === 0) {
+            console.log('   ⚠️ لا توجد إعدادات، جاري إضافة الإعدادات الافتراضية...');
+            for (const setting of DEFAULT_SETTINGS) {
                 await client.query(`
                     INSERT INTO wheel_settings (setting_key, setting_value)
                     VALUES ($1, $2)
                 `, [setting.key, setting.value]);
             }
-            console.log(`   ✅ تم إضافة ${DEFAULT_WHEEL_SETTINGS.length} إعداد للعجلة`);
+            console.log(`   ✅ تم إضافة ${DEFAULT_SETTINGS.length} إعداد افتراضي`);
         }
 
-        // 7. إضافة إعدادات SPINIX الافتراضية
+        // 4. إضافة النص العلوي للعجلة
+        const bannerCount = await client.query('SELECT COUNT(*) FROM wheel_banner');
+        if (parseInt(bannerCount.rows[0].count) === 0) {
+            await client.query(`
+                INSERT INTO wheel_banner (text)
+                VALUES ($1)
+            `, ['🎡 IChancy · عجلة الحظ']);
+            console.log('   ✅ تم إضافة النص العلوي الافتراضي');
+        }
+
+        // ============================================================
+        // 5. إنشاء جداول SPINIX
+        // ============================================================
+        for (const table of Object.keys(SPINIX_TABLES)) {
+            try {
+                await client.query(SPINIX_TABLES[table]);
+                console.log(`   ✅ جدول ${table}: تم إنشاؤه/تأكيده`);
+            } catch (err) {
+                console.log(`   ❌ جدول ${table}: فشل - ${err.message}`);
+                return false;
+            }
+        }
+
+        // 6. إضافة إعدادات SPINIX الافتراضية
         const spinixSettingsCount = await client.query('SELECT COUNT(*) FROM spinix_settings');
         if (parseInt(spinixSettingsCount.rows[0].count) === 0) {
             console.log('   ⚠️ لا توجد إعدادات لـ SPINIX، جاري الإضافة...');
@@ -578,16 +604,6 @@ async function ensureTables() {
             console.log(`   ✅ تم إضافة ${DEFAULT_SPINIX_SETTINGS.length + Object.keys(DEFAULT_SPINIX_MULTIPLIERS).length} إعداد لـ SPINIX`);
         }
 
-        // 8. إضافة النص العلوي للعجلة
-        const bannerCount = await client.query('SELECT COUNT(*) FROM wheel_banner');
-        if (parseInt(bannerCount.rows[0].count) === 0) {
-            await client.query(`
-                INSERT INTO wheel_banner (text)
-                VALUES ($1)
-            `, ['🎡 IChancy · عجلة الحظ']);
-            console.log('   ✅ تم إضافة النص العلوي الافتراضي');
-        }
-
         console.log('\n✅ ===== قاعدة البيانات جاهزة! =====');
         dbReady = true;
         return true;
@@ -600,136 +616,45 @@ async function ensureTables() {
     }
 }
 
-async function updateWheelTableSchema(client) {
-    try {
-        console.log('📋 ===== التحقق من هيكل جدول الجوائز =====');
-        
-        const checkColumns = await client.query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'wheel_prizes' 
-            AND column_name IN ('color', 'color2')
-        `);
-        
-        const existingColumns = checkColumns.rows.map(row => row.column_name);
-        
-        if (!existingColumns.includes('color')) {
-            console.log('➕ إضافة عمود color...');
-            await client.query(`
-                ALTER TABLE wheel_prizes 
-                ADD COLUMN color VARCHAR(50) DEFAULT '#1a1a2e'
-            `);
-            console.log('✅ تم إضافة عمود color');
-        }
-        
-        if (!existingColumns.includes('color2')) {
-            console.log('➕ إضافة عمود color2...');
-            await client.query(`
-                ALTER TABLE wheel_prizes 
-                ADD COLUMN color2 VARCHAR(50) DEFAULT '#16213e'
-            `);
-            console.log('✅ تم إضافة عمود color2');
-        }
-        
-        const checkUpdatedAt = await client.query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'wheel_prizes' 
-            AND column_name = 'updated_at'
-        `);
-        
-        if (checkUpdatedAt.rows.length === 0) {
-            console.log('➕ إضافة عمود updated_at...');
-            await client.query(`
-                ALTER TABLE wheel_prizes 
-                ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            `);
-            console.log('✅ تم إضافة عمود updated_at');
-        }
-        
-        console.log('✅ ===== هيكل جدول الجوائز محدث =====');
-        return true;
-    } catch (error) {
-        console.error('❌ خطأ في تحديث هيكل الجدول:', error);
-        return false;
-    }
-}
-
 // ================================================================
-//                      ===== المسارات العامة =====
+//                      ===== مسارات العجلة (كما هي تماماً) =====
 // ================================================================
 
+// -------------------- فحص الحالة --------------------
 app.get('/api/status', (req, res) => {
     res.json({
         status: 'running',
-        service: 'IChancy Games API',
+        service: 'Wheel of Fortune API',
         timestamp: new Date().toISOString(),
-        database: { ready: dbReady },
-        games: ['wheel', 'spinix']
+        database: { ready: dbReady }
     });
 });
 
+// -------------------- الصفحة الرئيسية --------------------
 app.get('/', (req, res) => {
     res.json({
         status: 'running',
-        service: 'IChancy Games API',
+        service: 'Wheel of Fortune API',
         message: '🚀 الخادم يعمل',
-        version: '1.0.0',
-        documentation: '/api/docs',
-        games: {
-            wheel: {
-                name: 'عجلة الحظ',
-                endpoints: {
-                    spin: 'POST /api/wheel/spin',
-                    history: 'GET /api/wheel/history/:user_id',
-                    spins: 'GET /api/wheel/spins/:user_id',
-                    claim: 'POST /api/wheel/claim/:spin_id',
-                    prizes: 'GET /api/prizes',
-                    banner: 'GET /api/banner'
-                },
-                admin: {
-                    settings: 'GET /api/admin/wheel/settings',
-                    setting: 'PUT /api/admin/wheel/setting',
-                    prizes: 'GET /api/admin/wheel/prizes',
-                    prize: 'GET /api/admin/wheel/prizes/:prize_id',
-                    add_prize: 'POST /api/admin/wheel/prizes',
-                    update_prize: 'PUT /api/admin/wheel/prizes/:prize_id',
-                    delete_prize: 'DELETE /api/admin/wheel/prizes/:prize_id',
-                    toggle_prize: 'PATCH /api/admin/wheel/prizes/:prize_id/toggle',
-                    seed_prizes: 'POST /api/admin/wheel/seed-prizes',
-                    reset_spins: 'POST /api/admin/wheel/reset-spins',
-                    banner: 'PUT /api/banner'
-                }
-            },
-            spinix: {
-                name: 'SPINIX - لعبة البرج',
-                endpoints: {
-                    status: 'GET /api/spinix/status',
-                    start: 'POST /api/spinix/start',
-                    drop: 'POST /api/spinix/drop',
-                    cashout: 'POST /api/spinix/cashout',
-                    history: 'GET /api/spinix/history/:user_id',
-                    game: 'GET /api/spinix/game/:game_id'
-                },
-                admin: {
-                    settings: 'GET /api/spinix/admin/settings',
-                    setting: 'PUT /api/spinix/admin/setting',
-                    multipliers: 'PUT /api/spinix/admin/multipliers',
-                    stats_detailed: 'GET /api/spinix/admin/stats/detailed',
-                    stats_summary: 'GET /api/spinix/admin/stats/summary',
-                    stats_weekly: 'GET /api/spinix/admin/stats/weekly',
-                    export: 'GET /api/spinix/admin/export'
-                }
+        endpoints: {
+            spin: 'POST /api/wheel/spin',
+            history: 'GET /api/wheel/history/:user_id',
+            prizes: 'GET /api/prizes',
+            admin: {
+                settings: 'GET /api/admin/settings',
+                setting: 'PUT /api/admin/setting',
+                prizes: 'GET /api/admin/prizes',
+                add_prize: 'POST /api/admin/prizes',
+                update_prize: 'PUT /api/admin/prizes/:prize_id',
+                delete_prize: 'DELETE /api/admin/prizes/:prize_id',
+                seed_prizes: 'POST /api/admin/seed-prizes',
+                reset_spins: 'POST /api/admin/reset-spins'
             }
         }
     });
 });
 
-// ================================================================
-//                      ===== مسارات العجلة (WHEEL) =====
-// ================================================================
-
-// ----- مسارات النص العلوي (Banner) -----
+// -------------------- النص العلوي (Banner) --------------------
 app.get('/api/banner', async (req, res) => {
     try {
         const result = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
@@ -755,22 +680,15 @@ app.put('/api/banner', async (req, res) => {
         });
     }
 
-    if (!text || text.trim() === '') {
-        return res.status(400).json({
-            success: false,
-            error: 'Text is required'
-        });
-    }
-
     try {
         await pool.query(`
             INSERT INTO wheel_banner (text, updated_at)
             VALUES ($1, CURRENT_TIMESTAMP)
-        `, [text.trim()]);
+        `, [text]);
 
         res.json({
             success: true,
-            message: '✅ تم تحديث النص العلوي بنجاح'
+            message: 'Banner updated successfully'
         });
     } catch (error) {
         res.status(500).json({
@@ -780,7 +698,7 @@ app.put('/api/banner', async (req, res) => {
     }
 });
 
-// ----- إعدادات العجلة (مسار متوافق مع الواجهة القديمة) -----
+// -------------------- الحصول على جميع الإعدادات --------------------
 app.get('/api/admin/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -801,6 +719,8 @@ app.get('/api/admin/settings', async (req, res) => {
         const banner = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
         settings.banner_text = banner.rows[0]?.text || '🎡 IChancy · عجلة الحظ';
 
+        console.log('📋 Settings loaded:', Object.keys(settings).length, 'keys');
+        
         res.json({
             success: true,
             settings
@@ -813,8 +733,11 @@ app.get('/api/admin/settings', async (req, res) => {
     }
 });
 
+// -------------------- تحديث إعداد واحد --------------------
 app.put('/api/admin/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
+
+    console.log(`📝 Updating setting: ${key} = ${value}`);
 
     if (parseInt(admin_id) !== ADMIN_ID) {
         return res.status(403).json({
@@ -845,11 +768,14 @@ app.put('/api/admin/setting', async (req, res) => {
             `, [key, value]);
         }
 
+        console.log(`✅ Setting ${key} updated successfully`);
+        
         res.json({
             success: true,
-            message: '✅ تم تحديث الإعداد بنجاح'
+            message: 'Setting updated successfully'
         });
     } catch (error) {
+        console.error(`❌ Error updating setting ${key}:`, error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -857,8 +783,8 @@ app.put('/api/admin/setting', async (req, res) => {
     }
 });
 
-// ----- إعدادات العجلة (مسارات جديدة منظمة) -----
-app.get('/api/admin/wheel/settings', async (req, res) => {
+// -------------------- الحصول على الجوائز (للأدمن) --------------------
+app.get('/api/admin/prizes', async (req, res) => {
     const { admin_id } = req.query;
 
     if (parseInt(admin_id) !== ADMIN_ID) {
@@ -869,18 +795,16 @@ app.get('/api/admin/wheel/settings', async (req, res) => {
     }
 
     try {
-        const result = await pool.query('SELECT * FROM wheel_settings');
-        const settings = {};
-        result.rows.forEach(row => {
-            settings[row.setting_key] = row.setting_value;
-        });
-
-        const banner = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
-        settings.banner_text = banner.rows[0]?.text || '🎡 IChancy · عجلة الحظ';
-
+        const result = await pool.query(`
+            SELECT * FROM wheel_prizes 
+            ORDER BY id ASC
+        `);
+        
+        console.log(`📋 Loaded ${result.rows.length} prizes for admin`);
+        
         res.json({
             success: true,
-            settings
+            prizes: result.rows
         });
     } catch (error) {
         res.status(500).json({
@@ -890,55 +814,7 @@ app.get('/api/admin/wheel/settings', async (req, res) => {
     }
 });
 
-app.put('/api/admin/wheel/setting', async (req, res) => {
-    const { admin_id, key, value } = req.body;
-
-    if (parseInt(admin_id) !== ADMIN_ID) {
-        return res.status(403).json({
-            success: false,
-            error: 'Unauthorized - Admin only'
-        });
-    }
-
-    if (!key) {
-        return res.status(400).json({
-            success: false,
-            error: 'Key is required'
-        });
-    }
-
-    try {
-        if (key === 'banner_text') {
-            await pool.query(`
-                INSERT INTO wheel_banner (text, updated_at)
-                VALUES ($1, CURRENT_TIMESTAMP)
-            `, [value]);
-        } else {
-            await pool.query(`
-                INSERT INTO wheel_settings (setting_key, setting_value, updated_at)
-                VALUES ($1, $2, CURRENT_TIMESTAMP)
-                ON CONFLICT (setting_key) 
-                DO UPDATE SET setting_value = $2, updated_at = CURRENT_TIMESTAMP
-            `, [key, value]);
-        }
-
-        res.json({
-            success: true,
-            message: '✅ تم تحديث الإعداد بنجاح'
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ================================================================
-//                      ===== مسارات جوائز العجلة (WHEEL PRIZES) =====
-// ================================================================
-
-// ----- الحصول على الجوائز النشطة (للعجلة) -----
+// -------------------- الحصول على الجوائز النشطة (للعجلة) --------------------
 app.get('/api/prizes', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -959,76 +835,12 @@ app.get('/api/prizes', async (req, res) => {
     }
 });
 
-// ----- الحصول على جميع الجوائز (للمدير) -----
-app.get('/api/admin/wheel/prizes', async (req, res) => {
-    const { admin_id } = req.query;
-
-    if (parseInt(admin_id) !== ADMIN_ID) {
-        return res.status(403).json({
-            success: false,
-            error: 'Unauthorized - Admin only'
-        });
-    }
-
-    try {
-        const result = await pool.query(`
-            SELECT * FROM wheel_prizes 
-            ORDER BY id ASC
-        `);
-        
-        res.json({
-            success: true,
-            prizes: result.rows,
-            count: result.rows.length
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ----- الحصول على جائزة محددة -----
-app.get('/api/admin/wheel/prizes/:prize_id', async (req, res) => {
-    const { prize_id } = req.params;
-    const { admin_id } = req.query;
-
-    if (parseInt(admin_id) !== ADMIN_ID) {
-        return res.status(403).json({
-            success: false,
-            error: 'Unauthorized - Admin only'
-        });
-    }
-
-    try {
-        const result = await pool.query(`
-            SELECT * FROM wheel_prizes WHERE id = $1
-        `, [prize_id]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'الجائزة غير موجودة'
-            });
-        }
-
-        res.json({
-            success: true,
-            prize: result.rows[0]
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ----- إضافة جائزة جديدة -----
-app.post('/api/admin/wheel/prizes', async (req, res) => {
+// -------------------- إضافة جائزة جديدة --------------------
+app.post('/api/admin/prizes', async (req, res) => {
     const { admin_id, name, description, probability, icon, color, color2 } = req.body;
 
+    console.log(`📝 Adding new prize: ${name}`);
+
     if (parseInt(admin_id) !== ADMIN_ID) {
         return res.status(403).json({
             success: false,
@@ -1036,18 +848,10 @@ app.post('/api/admin/wheel/prizes', async (req, res) => {
         });
     }
 
-    if (!name || probability === undefined || probability === null) {
+    if (!name || probability === undefined) {
         return res.status(400).json({
             success: false,
-            error: 'الاسم والنسبة مطلوبان'
-        });
-    }
-
-    const prob = parseFloat(probability);
-    if (isNaN(prob) || prob < 0 || prob > 100) {
-        return res.status(400).json({
-            success: false,
-            error: 'النسبة يجب أن تكون بين 0 و 100'
+            error: 'Name and probability are required'
         });
     }
 
@@ -1056,7 +860,9 @@ app.post('/api/admin/wheel/prizes', async (req, res) => {
             INSERT INTO wheel_prizes (name, description, probability, icon, color, color2, is_active)
             VALUES ($1, $2, $3, $4, $5, $6, true)
             RETURNING *
-        `, [name.trim(), description?.trim() || '', prob, icon?.trim() || '🎁', color?.trim() || '#1a1a2e', color2?.trim() || '#16213e']);
+        `, [name, description || '', probability, icon || '🎁', color || '#1a1a2e', color2 || '#16213e']);
+
+        console.log(`✅ Prize added: ${result.rows[0].id} - ${name}`);
 
         res.json({
             success: true,
@@ -1064,6 +870,7 @@ app.post('/api/admin/wheel/prizes', async (req, res) => {
             message: '✅ تم إضافة الجائزة بنجاح'
         });
     } catch (error) {
+        console.error('❌ Error adding prize:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -1071,10 +878,12 @@ app.post('/api/admin/wheel/prizes', async (req, res) => {
     }
 });
 
-// ----- تحديث جائزة -----
-app.put('/api/admin/wheel/prizes/:prize_id', async (req, res) => {
+// -------------------- تحديث جائزة (مع دعم الألوان والنسبة) --------------------
+app.put('/api/admin/prizes/:prize_id', async (req, res) => {
     const { prize_id } = req.params;
     const { admin_id, name, description, probability, icon, color, color2, is_active } = req.body;
+
+    console.log(`📝 Updating prize ${prize_id}:`, { name, probability, color, color2 });
 
     if (parseInt(admin_id) !== ADMIN_ID) {
         return res.status(403).json({
@@ -1084,40 +893,36 @@ app.put('/api/admin/wheel/prizes/:prize_id', async (req, res) => {
     }
 
     try {
+        let query = 'UPDATE wheel_prizes SET ';
         const updates = [];
         const values = [];
         let paramIndex = 1;
 
-        if (name !== undefined && name !== null && name.trim() !== '') {
+        if (name !== undefined && name !== null && name !== '') {
             updates.push(`name = $${paramIndex++}`);
-            values.push(name.trim());
+            values.push(name);
         }
         if (description !== undefined && description !== null) {
             updates.push(`description = $${paramIndex++}`);
-            values.push(description.trim() || '');
+            values.push(description);
         }
         if (probability !== undefined && probability !== null) {
-            const prob = parseFloat(probability);
-            if (isNaN(prob) || prob < 0 || prob > 100) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'النسبة يجب أن تكون بين 0 و 100'
-                });
-            }
             updates.push(`probability = $${paramIndex++}`);
-            values.push(prob);
+            values.push(parseFloat(probability));
         }
-        if (icon !== undefined && icon !== null) {
+        if (icon !== undefined && icon !== null && icon !== '') {
             updates.push(`icon = $${paramIndex++}`);
-            values.push(icon.trim() || '🎁');
+            values.push(icon);
         }
-        if (color !== undefined && color !== null) {
+        if (color !== undefined && color !== null && color !== '') {
             updates.push(`color = $${paramIndex++}`);
-            values.push(color.trim() || '#1a1a2e');
+            values.push(color);
+            console.log(`🎨 Setting color to: ${color}`);
         }
-        if (color2 !== undefined && color2 !== null) {
+        if (color2 !== undefined && color2 !== null && color2 !== '') {
             updates.push(`color2 = $${paramIndex++}`);
-            values.push(color2.trim() || '#16213e');
+            values.push(color2);
+            console.log(`🎨 Setting color2 to: ${color2}`);
         }
         if (is_active !== undefined && is_active !== null) {
             updates.push(`is_active = $${paramIndex++}`);
@@ -1127,22 +932,28 @@ app.put('/api/admin/wheel/prizes/:prize_id', async (req, res) => {
         if (updates.length === 0) {
             return res.status(400).json({
                 success: false,
-                error: 'لا توجد حقول للتحديث'
+                error: 'No fields to update'
             });
         }
 
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
         values.push(prize_id);
 
-        const query = `UPDATE wheel_prizes SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`;
-        const result = await pool.query(query, values);
+        const fullQuery = query + updates.join(', ') + ` WHERE id = $${values.length} RETURNING *`;
+
+        console.log('📝 Full query:', fullQuery);
+        console.log('📝 Values:', values);
+
+        const result = await pool.query(fullQuery, values);
 
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                error: 'الجائزة غير موجودة'
+                error: 'Prize not found'
             });
         }
+
+        console.log('✅ Prize updated:', result.rows[0]);
 
         res.json({
             success: true,
@@ -1158,10 +969,12 @@ app.put('/api/admin/wheel/prizes/:prize_id', async (req, res) => {
     }
 });
 
-// ----- حذف جائزة -----
-app.delete('/api/admin/wheel/prizes/:prize_id', async (req, res) => {
+// -------------------- حذف جائزة --------------------
+app.delete('/api/admin/prizes/:prize_id', async (req, res) => {
     const { prize_id } = req.params;
     const { admin_id } = req.body;
+
+    console.log(`🗑️ Deleting prize ${prize_id}`);
 
     if (parseInt(admin_id) !== ADMIN_ID) {
         return res.status(403).json({
@@ -1171,29 +984,31 @@ app.delete('/api/admin/wheel/prizes/:prize_id', async (req, res) => {
     }
 
     try {
-        // تحديث السجلات المرتبطة
         await pool.query(
             'UPDATE wheel_spins SET prize_id = NULL WHERE prize_id = $1',
             [prize_id]
         );
 
         const result = await pool.query(
-            'DELETE FROM wheel_prizes WHERE id = $1 RETURNING id, name',
+            'DELETE FROM wheel_prizes WHERE id = $1 RETURNING id',
             [prize_id]
         );
 
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                error: 'الجائزة غير موجودة'
+                error: 'Prize not found'
             });
         }
 
+        console.log(`✅ Prize ${prize_id} deleted successfully`);
+
         res.json({
             success: true,
-            message: `✅ تم حذف الجائزة "${result.rows[0].name}" بنجاح`
+            message: '✅ تم حذف الجائزة بنجاح'
         });
     } catch (error) {
+        console.error('❌ Delete error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -1201,48 +1016,8 @@ app.delete('/api/admin/wheel/prizes/:prize_id', async (req, res) => {
     }
 });
 
-// ----- تفعيل/تعطيل جائزة -----
-app.patch('/api/admin/wheel/prizes/:prize_id/toggle', async (req, res) => {
-    const { prize_id } = req.params;
-    const { admin_id } = req.body;
-
-    if (parseInt(admin_id) !== ADMIN_ID) {
-        return res.status(403).json({
-            success: false,
-            error: 'Unauthorized - Admin only'
-        });
-    }
-
-    try {
-        const result = await pool.query(`
-            UPDATE wheel_prizes 
-            SET is_active = NOT is_active, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-            RETURNING *
-        `, [prize_id]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'الجائزة غير موجودة'
-            });
-        }
-
-        res.json({
-            success: true,
-            prize: result.rows[0],
-            message: `✅ تم ${result.rows[0].is_active ? 'تفعيل' : 'تعطيل'} الجائزة بنجاح`
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ----- إعادة تعيين الجوائز الافتراضية -----
-app.post('/api/admin/wheel/seed-prizes', async (req, res) => {
+// -------------------- إعادة تعيين الجوائز --------------------
+app.post('/api/admin/seed-prizes', async (req, res) => {
     const { admin_id } = req.body;
 
     if (parseInt(admin_id) !== ADMIN_ID) {
@@ -1263,11 +1038,14 @@ app.post('/api/admin/wheel/seed-prizes', async (req, res) => {
             `, [prize.name, prize.description, prize.probability, prize.icon, prize.color, prize.color2]);
         }
 
+        console.log('🔄 Prizes reset to defaults');
+
         res.json({
             success: true,
             message: '✅ تم إعادة تعيين الجوائز الافتراضية بنجاح!'
         });
     } catch (error) {
+        console.error('❌ Reset error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -1275,9 +1053,11 @@ app.post('/api/admin/wheel/seed-prizes', async (req, res) => {
     }
 });
 
-// ----- إعادة تعيين سجل التدويرات -----
-app.post('/api/admin/wheel/reset-spins', async (req, res) => {
+// -------------------- إعادة تعيين التدويرات (بدون كاش) --------------------
+app.post('/api/admin/reset-spins', async (req, res) => {
     const { admin_id, user_id } = req.body;
+
+    console.log(`🔄 Resetting spins: admin=${admin_id}, user=${user_id || 'all'}`);
 
     if (parseInt(admin_id) !== ADMIN_ID) {
         return res.status(403).json({
@@ -1295,9 +1075,11 @@ app.post('/api/admin/wheel/reset-spins', async (req, res) => {
                 [user_id]
             );
             deletedCount = result.rowCount;
+            console.log(`🗑️ Deleted ${deletedCount} spins for user ${user_id}`);
         } else {
             const result = await pool.query('DELETE FROM wheel_spins RETURNING id');
             deletedCount = result.rowCount;
+            console.log(`🗑️ Deleted ${deletedCount} spins for all users`);
         }
 
         await pool.query('ALTER SEQUENCE wheel_spins_id_seq RESTART WITH 1');
@@ -1307,7 +1089,9 @@ app.post('/api/admin/wheel/reset-spins', async (req, res) => {
             deleted_count: deletedCount,
             message: `✅ تم حذف ${deletedCount} تدوير${user_id ? ` للمستخدم ${user_id}` : ''} بنجاح`
         });
+
     } catch (error) {
+        console.error('❌ Reset spins error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -1315,7 +1099,7 @@ app.post('/api/admin/wheel/reset-spins', async (req, res) => {
     }
 });
 
-// ----- تدوير العجلة -----
+// -------------------- تدوير العجلة --------------------
 app.post('/api/wheel/spin', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1336,25 +1120,67 @@ app.post('/api/wheel/spin', async (req, res) => {
     try {
         console.log(`🎡 Spin request for user: ${user_id}`);
 
-        const isActive = await getWheelSetting('is_active');
-        if (isActive !== 'true') {
+        // 1. التحقق من تفعيل العجلة
+        const isActive = await pool.query(
+            'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+            ['is_active']
+        );
+        if (isActive.rows[0]?.setting_value !== 'true') {
             return res.status(403).json({
                 success: false,
                 error: 'العجلة معطلة حالياً'
             });
         }
 
-        const depositCheck = await checkWheelDepositRequirement(user_id);
-        if (!depositCheck.canPlay) {
-            return res.status(403).json({
-                success: false,
-                error: depositCheck.reason,
-                deposit_required: true,
-                ...depositCheck
-            });
+        // 2. التحقق من شرط الإيداع
+        const depositRequired = await pool.query(
+            'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+            ['deposit_required']
+        );
+        const isDepositRequired = depositRequired.rows[0]?.setting_value === 'true';
+
+        if (isDepositRequired) {
+            const minAmount = await pool.query(
+                'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+                ['deposit_min_amount']
+            );
+            const checkHours = await pool.query(
+                'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+                ['deposit_check_hours']
+            );
+            
+            const minAmountValue = parseFloat(minAmount.rows[0]?.setting_value || 1000);
+            const checkHoursValue = parseInt(checkHours.rows[0]?.setting_value || 24);
+
+            const userDeposits = await pool.query(`
+                SELECT COALESCE(SUM(final_amount), 0) as total
+                FROM payments_log
+                WHERE user_id = $1 
+                AND status = 'completed'
+                AND payment_time >= NOW() - INTERVAL '${checkHoursValue} hours'
+            `, [user_id]);
+
+            const totalDeposits = parseFloat(userDeposits.rows[0]?.total || 0);
+
+            if (totalDeposits < minAmountValue) {
+                return res.status(403).json({
+                    success: false,
+                    error: `مطلوب إيداع ${minAmountValue} SYP خلال آخر ${checkHoursValue} ساعة`,
+                    deposit_required: true,
+                    min_deposit: minAmountValue,
+                    check_hours: checkHoursValue,
+                    current_deposits: totalDeposits,
+                    remaining: minAmountValue - totalDeposits
+                });
+            }
         }
 
-        const intervalHours = parseInt(await getWheelSetting('spin_interval_hours') || 24);
+        // 3. التحقق من آخر تدوير
+        const intervalHours = await pool.query(
+            'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+            ['spin_interval_hours']
+        );
+        const intervalHoursValue = parseInt(intervalHours.rows[0]?.setting_value || 24);
 
         const lastSpin = await pool.query(`
             SELECT spin_date FROM wheel_spins 
@@ -1368,9 +1194,11 @@ app.post('/api/wheel/spin', async (req, res) => {
             const now = new Date();
             const hoursDiff = (now - lastSpinDate) / (1000 * 60 * 60);
 
-            if (hoursDiff < intervalHours) {
-                const remainingHours = Math.ceil(intervalHours - hoursDiff);
-                const remainingMinutes = Math.ceil((intervalHours - hoursDiff) * 60);
+            console.log(`⏰ Last spin: ${lastSpinDate}, Now: ${now}, Diff: ${hoursDiff}h`);
+
+            if (hoursDiff < intervalHoursValue) {
+                const remainingHours = Math.ceil(intervalHoursValue - hoursDiff);
+                const remainingMinutes = Math.ceil((intervalHoursValue - hoursDiff) * 60);
                 
                 return res.status(429).json({
                     success: false,
@@ -1379,8 +1207,11 @@ app.post('/api/wheel/spin', async (req, res) => {
                     remaining_minutes: remainingMinutes % 60
                 });
             }
+        } else {
+            console.log(`👤 User ${user_id} has no previous spins`);
         }
 
+        // 4. اختيار جائزة
         const prizes = await pool.query(`
             SELECT * FROM wheel_prizes 
             WHERE is_active = true
@@ -1405,12 +1236,18 @@ app.post('/api/wheel/spin', async (req, res) => {
             random -= parseFloat(prize.probability);
         }
 
+        console.log(`🎯 Selected prize: ${selectedPrize.name} (${selectedPrize.probability}%)`);
+
+        // 5. تسجيل التدوير
         const result = await pool.query(`
             INSERT INTO wheel_spins (user_id, prize_id, prize_name, is_claimed)
             VALUES ($1, $2, $3, FALSE)
             RETURNING id, spin_date
         `, [user_id, selectedPrize.id, selectedPrize.name]);
 
+        console.log(`✅ Spin recorded: ID=${result.rows[0].id}, User=${user_id}, Prize=${selectedPrize.name}`);
+
+        // 6. إحصائيات المستخدم
         const userStats = await pool.query(`
             SELECT 
                 COUNT(*) as total_spins,
@@ -1441,7 +1278,7 @@ app.post('/api/wheel/spin', async (req, res) => {
     }
 });
 
-// ----- سجل العجلة (المبسط) -----
+// -------------------- سجل المستخدم --------------------
 app.get('/api/wheel/history/:user_id', async (req, res) => {
     const { user_id } = req.params;
 
@@ -1460,8 +1297,47 @@ app.get('/api/wheel/history/:user_id', async (req, res) => {
             LIMIT 1
         `, [user_id]);
 
-        const intervalHours = parseInt(await getWheelSetting('spin_interval_hours') || 24);
-        const depositCheck = await checkWheelDepositRequirement(user_id);
+        const intervalHours = await pool.query(
+            'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+            ['spin_interval_hours']
+        );
+        const intervalHoursValue = parseInt(intervalHours.rows[0]?.setting_value || 24);
+
+        const depositRequired = await pool.query(
+            'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+            ['deposit_required']
+        );
+        const isDepositRequired = depositRequired.rows[0]?.setting_value === 'true';
+        
+        let depositInfo = null;
+        if (isDepositRequired) {
+            const minAmount = await pool.query(
+                'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+                ['deposit_min_amount']
+            );
+            const checkHours = await pool.query(
+                'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
+                ['deposit_check_hours']
+            );
+            const minAmountValue = parseFloat(minAmount.rows[0]?.setting_value || 1000);
+            const checkHoursValue = parseInt(checkHours.rows[0]?.setting_value || 24);
+
+            const userDeposits = await pool.query(`
+                SELECT COALESCE(SUM(final_amount), 0) as total
+                FROM payments_log
+                WHERE user_id = $1 
+                AND status = 'completed'
+                AND payment_time >= NOW() - INTERVAL '${checkHoursValue} hours'
+            `, [user_id]);
+
+            depositInfo = {
+                required: true,
+                min_amount: minAmountValue,
+                check_hours: checkHoursValue,
+                current_deposits: parseFloat(userDeposits.rows[0]?.total || 0),
+                is_met: parseFloat(userDeposits.rows[0]?.total || 0) >= minAmountValue
+            };
+        }
 
         let can_spin = true;
         let remaining_hours = 0;
@@ -1472,14 +1348,14 @@ app.get('/api/wheel/history/:user_id', async (req, res) => {
             const now = new Date();
             const hoursDiff = (now - lastSpinDate) / (1000 * 60 * 60);
 
-            if (hoursDiff < intervalHours) {
+            if (hoursDiff < intervalHoursValue) {
                 can_spin = false;
-                remaining_hours = Math.floor(intervalHours - hoursDiff);
-                remaining_minutes = Math.ceil((intervalHours - hoursDiff) * 60) % 60;
+                remaining_hours = Math.floor(intervalHoursValue - hoursDiff);
+                remaining_minutes = Math.ceil((intervalHoursValue - hoursDiff) * 60) % 60;
             }
         }
 
-        if (depositCheck.required && !depositCheck.is_met) {
+        if (isDepositRequired && depositInfo && !depositInfo.is_met) {
             can_spin = false;
         }
 
@@ -1489,14 +1365,6 @@ app.get('/api/wheel/history/:user_id', async (req, res) => {
                 COUNT(CASE WHEN prize_name NOT LIKE '%حظ سعيد%' THEN 1 END) as wins
             FROM wheel_spins 
             WHERE user_id = $1
-        `, [user_id]);
-
-        const recentSpins = await pool.query(`
-            SELECT id, prize_name, spin_date, is_claimed
-            FROM wheel_spins 
-            WHERE user_id = $1 
-            ORDER BY spin_date DESC 
-            LIMIT 10
         `, [user_id]);
 
         res.json({
@@ -1509,161 +1377,13 @@ app.get('/api/wheel/history/:user_id', async (req, res) => {
                 can_spin: can_spin,
                 remaining_hours: remaining_hours,
                 remaining_minutes: remaining_minutes,
-                interval_hours: intervalHours
+                interval_hours: intervalHoursValue
             },
-            deposit_requirement: depositCheck,
-            recent_spins: recentSpins.rows
+            deposit_requirement: depositInfo
         });
 
     } catch (error) {
         console.error('History error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ----- الحصول على سجل تدويرات مفصل مع ترقيم الصفحات -----
-app.get('/api/wheel/spins/:user_id', async (req, res) => {
-    const { user_id } = req.params;
-    const { limit, offset } = req.query;
-
-    const limitNum = parseInt(limit) || 20;
-    const offsetNum = parseInt(offset) || 0;
-
-    try {
-        const result = await pool.query(`
-            SELECT 
-                ws.id, ws.prize_name, ws.spin_date, ws.is_claimed, ws.claimed_date,
-                wp.id as prize_id, wp.icon, wp.color, wp.color2, wp.description
-            FROM wheel_spins ws
-            LEFT JOIN wheel_prizes wp ON ws.prize_id = wp.id
-            WHERE ws.user_id = $1
-            ORDER BY ws.spin_date DESC
-            LIMIT $2 OFFSET $3
-        `, [user_id, limitNum, offsetNum]);
-
-        const total = await pool.query(`
-            SELECT COUNT(*) as count
-            FROM wheel_spins
-            WHERE user_id = $1
-        `, [user_id]);
-
-        res.json({
-            success: true,
-            spins: result.rows,
-            total: parseInt(total.rows[0].count),
-            pagination: {
-                limit: limitNum,
-                offset: offsetNum,
-                total_pages: Math.ceil(parseInt(total.rows[0].count) / limitNum)
-            }
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ----- المطالبة بجائزة (Claim) -----
-app.post('/api/wheel/claim/:spin_id', async (req, res) => {
-    const { spin_id } = req.params;
-    const { user_id } = req.body;
-
-    if (!user_id) {
-        return res.status(400).json({
-            success: false,
-            error: 'user_id is required'
-        });
-    }
-
-    try {
-        const result = await pool.query(`
-            UPDATE wheel_spins 
-            SET is_claimed = true, claimed_date = CURRENT_TIMESTAMP
-            WHERE id = $1 AND user_id = $2 AND is_claimed = false
-            RETURNING *
-        `, [spin_id, user_id]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'التدوير غير موجود أو تم المطالبة به مسبقاً'
-            });
-        }
-
-        res.json({
-            success: true,
-            message: '✅ تم المطالبة بالجائزة بنجاح',
-            spin: result.rows[0]
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ----- إحصائيات العجلة للمدير -----
-app.get('/api/admin/wheel/stats', async (req, res) => {
-    const { admin_id } = req.query;
-
-    if (parseInt(admin_id) !== ADMIN_ID) {
-        return res.status(403).json({
-            success: false,
-            error: 'Unauthorized - Admin only'
-        });
-    }
-
-    try {
-        const totalSpins = await pool.query('SELECT COUNT(*) as count FROM wheel_spins');
-        const totalUsers = await pool.query('SELECT COUNT(DISTINCT user_id) as count FROM wheel_spins');
-        const todaySpins = await pool.query(`
-            SELECT COUNT(*) as count FROM wheel_spins 
-            WHERE DATE(spin_date) = CURRENT_DATE
-        `);
-        
-        const prizeStats = await pool.query(`
-            SELECT 
-                prize_name,
-                COUNT(*) as count,
-                COUNT(CASE WHEN is_claimed = true THEN 1 END) as claimed
-            FROM wheel_spins
-            WHERE prize_name NOT LIKE '%حظ سعيد%'
-            GROUP BY prize_name
-            ORDER BY count DESC
-            LIMIT 10
-        `);
-
-        const dailyStats = await pool.query(`
-            SELECT 
-                DATE(spin_date) as date,
-                COUNT(*) as spins,
-                COUNT(CASE WHEN prize_name NOT LIKE '%حظ سعيد%' THEN 1 END) as wins
-            FROM wheel_spins
-            WHERE spin_date >= CURRENT_DATE - INTERVAL '7 days'
-            GROUP BY DATE(spin_date)
-            ORDER BY date DESC
-        `);
-
-        res.json({
-            success: true,
-            stats: {
-                total_spins: parseInt(totalSpins.rows[0].count),
-                total_users: parseInt(totalUsers.rows[0].count),
-                today_spins: parseInt(todaySpins.rows[0].count),
-                top_prizes: prizeStats.rows,
-                daily_stats: dailyStats.rows
-            }
-        });
-
-    } catch (error) {
         res.status(500).json({
             success: false,
             error: error.message
@@ -1714,9 +1434,7 @@ app.get('/api/spinix/status', async (req, res) => {
                 COALESCE(SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END), 0) as wins,
                 COALESCE(SUM(CASE WHEN result = 'cashout' THEN 1 ELSE 0 END), 0) as cashouts,
                 COALESCE(SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END), 0) as losses,
-                COALESCE(COUNT(*), 0) as total_games,
-                COALESCE(SUM(CASE WHEN is_profit = true THEN profit ELSE 0 END), 0) as total_profit,
-                COALESCE(SUM(CASE WHEN is_profit = false THEN bet_amount ELSE 0 END), 0) as total_loss
+                COALESCE(COUNT(*), 0) as total_games
             FROM spinix_history 
             WHERE user_id = $1
         `, [user_id]);
@@ -1746,10 +1464,7 @@ app.get('/api/spinix/status', async (req, res) => {
                 wins: parseInt(stats.rows[0].wins),
                 cashouts: parseInt(stats.rows[0].cashouts),
                 losses: parseInt(stats.rows[0].losses),
-                total_games: parseInt(stats.rows[0].total_games),
-                total_profit: parseFloat(stats.rows[0].total_profit || 0),
-                total_loss: parseFloat(stats.rows[0].total_loss || 0),
-                net_result: parseFloat(stats.rows[0].total_profit || 0) - parseFloat(stats.rows[0].total_loss || 0)
+                total_games: parseInt(stats.rows[0].total_games)
             }
         });
 
@@ -1793,7 +1508,6 @@ app.post('/api/spinix/start', async (req, res) => {
         }
 
         const betAmount = parseFloat(await getSpinixSetting('bet_amount') || 1000);
-        const maxFloor = parseInt(await getSpinixSetting('max_floors') || 13);
 
         const activeGame = await pool.query(`
             SELECT * FROM spinix_games 
@@ -1833,7 +1547,6 @@ app.post('/api/spinix/start', async (req, res) => {
             message: '✅ بدأت جولة جديدة!',
             game: result.rows[0],
             bet_amount: betAmount,
-            max_floors: maxFloor,
             deposit_check: depositCheck
         });
 
@@ -1854,13 +1567,6 @@ app.post('/api/spinix/drop', async (req, res) => {
         return res.status(400).json({
             success: false,
             error: 'user_id is required'
-        });
-    }
-
-    if (floor_number === undefined || floor_number === null) {
-        return res.status(400).json({
-            success: false,
-            error: 'floor_number is required'
         });
     }
 
@@ -1887,23 +1593,19 @@ app.post('/api/spinix/drop', async (req, res) => {
         if (floor_number !== currentFloor + 1) {
             return res.status(400).json({
                 success: false,
-                error: `خطأ في ترتيب الطوابق. المتوقع: ${currentFloor + 1}`,
-                expected: currentFloor + 1,
-                received: floor_number
+                error: 'خطأ في ترتيب الطوابق'
             });
         }
 
         const multiplier = await getSpinixMultiplier(floor_number);
-        const actualOverlap = overlap_width || 0.5;
-        const required = required_overlap || minOverlap;
-        const isSuccess = actualOverlap >= required;
+        const isSuccess = overlap_width >= (required_overlap || minOverlap);
         const profit = isSuccess ? betAmount * multiplier : 0;
 
         await pool.query(`
             INSERT INTO spinix_game_details 
             (game_id, user_id, floor_number, position_x, overlap_width, required_overlap, is_success, multiplier, profit_at_floor)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        `, [game.id, user_id, floor_number, position_x || 0, actualOverlap, required, isSuccess, multiplier, profit]);
+        `, [game.id, user_id, floor_number, position_x, overlap_width, required_overlap, isSuccess, multiplier, profit]);
 
         if (isSuccess) {
             if (floor_number >= maxFloor) {
@@ -1957,8 +1659,6 @@ app.post('/api/spinix/drop', async (req, res) => {
                     floor_number: floor_number,
                     multiplier: multiplier,
                     profit: profit,
-                    next_floor: floor_number + 1,
-                    max_floor: maxFloor,
                     message: `✅ اجتزت الطابق ${floor_number}`
                 });
             }
@@ -1997,9 +1697,7 @@ app.post('/api/spinix/drop', async (req, res) => {
                     bet_amount: betAmount,
                     lost_amount: betAmount,
                     floors_passed: successfulFloors,
-                    failed_at: floor_number,
-                    overlap_width: actualOverlap,
-                    required_overlap: required
+                    failed_at: floor_number
                 }
             });
         }
@@ -2143,8 +1841,7 @@ app.get('/api/spinix/history/:user_id', async (req, res) => {
                 COUNT(CASE WHEN result = 'cashout' THEN 1 END) as total_cashouts,
                 COUNT(CASE WHEN result = 'loss' THEN 1 END) as total_losses,
                 COALESCE(SUM(CASE WHEN is_profit = true THEN profit ELSE 0 END), 0) as total_profit,
-                COALESCE(SUM(CASE WHEN is_profit = false THEN bet_amount ELSE 0 END), 0) as total_loss,
-                COALESCE(MAX(profit), 0) as max_profit
+                COALESCE(SUM(CASE WHEN is_profit = false THEN bet_amount ELSE 0 END), 0) as total_loss
             FROM spinix_history
             WHERE user_id = $1
         `, [user_id]);
@@ -2159,13 +1856,11 @@ app.get('/api/spinix/history/:user_id', async (req, res) => {
                 total_losses: parseInt(stats.rows[0]?.total_losses || 0),
                 total_profit: parseFloat(stats.rows[0]?.total_profit || 0),
                 total_loss: parseFloat(stats.rows[0]?.total_loss || 0),
-                max_profit: parseFloat(stats.rows[0]?.max_profit || 0),
                 net_result: parseFloat(stats.rows[0]?.total_profit || 0) - parseFloat(stats.rows[0]?.total_loss || 0)
             },
             pagination: {
                 limit: limitNum,
-                offset: offsetNum,
-                total_pages: Math.ceil(parseInt(stats.rows[0]?.total_games || 0) / limitNum)
+                offset: offsetNum
             }
         });
 
@@ -2815,18 +2510,13 @@ async function startServer() {
     app.listen(port, () => {
         console.log(`\n✅ الخادم يعمل على المنفذ ${port}`);
         console.log(`🔗 فحص الحالة: http://localhost:${port}/api/status`);
-        console.log(`\n🎡 مسارات العجلة:`);
-        console.log(`   🔗 الجوائز النشطة: http://localhost:${port}/api/prizes`);
-        console.log(`   🔗 تدوير: POST http://localhost:${port}/api/wheel/spin`);
-        console.log(`   🔗 إدارة الجوائز: http://localhost:${port}/api/admin/wheel/prizes?admin_id=${ADMIN_ID}`);
-        console.log(`   🔗 إعدادات العجلة: http://localhost:${port}/api/admin/wheel/settings?admin_id=${ADMIN_ID}`);
+        console.log(`🔗 الجوائز النشطة: http://localhost:${port}/api/prizes`);
+        console.log(`🔗 لوحة إدارة العجلة: http://localhost:${port}/api/admin/prizes?admin_id=${ADMIN_ID}`);
         console.log(`\n🎮 مسارات SPINIX:`);
         console.log(`   🔗 الحالة: http://localhost:${port}/api/spinix/status?user_id=123`);
+        console.log(`   🔗 بدء جولة: POST http://localhost:${port}/api/spinix/start`);
         console.log(`   🔗 إدارة SPINIX: http://localhost:${port}/api/spinix/admin/settings?admin_id=${ADMIN_ID}`);
-        console.log(`\n📊 الإحصائيات:`);
-        console.log(`   🔗 إحصائيات العجلة: http://localhost:${port}/api/admin/wheel/stats?admin_id=${ADMIN_ID}`);
-        console.log(`   🔗 إحصائيات SPINIX: http://localhost:${port}/api/spinix/admin/stats/summary?admin_id=${ADMIN_ID}`);
-        console.log('\n📋 ===== جاهز للإنتاج! =====\n');
+        console.log('\n📋 ===== جاهز! =====\n');
     });
 }
 

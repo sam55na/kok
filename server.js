@@ -45,7 +45,6 @@ let dbReady = false;
 //                      ===== إنشاء الجداول =====
 // ================================================================
 
-// 1. جداول العجلة (Wheel)
 const WHEEL_TABLES = {
     wheel_prizes: `
         CREATE TABLE IF NOT EXISTS wheel_prizes (
@@ -89,7 +88,6 @@ const WHEEL_TABLES = {
     `
 };
 
-// 2. جداول SPINIX
 const SPINIX_TABLES = {
     spinix_games: `
         CREATE TABLE IF NOT EXISTS spinix_games (
@@ -179,7 +177,6 @@ const SPINIX_TABLES = {
     `
 };
 
-// 3. جدول المدفوعات (مشترك)
 const PAYMENT_TABLES = {
     payments_log: `
         CREATE TABLE IF NOT EXISTS payments_log (
@@ -224,7 +221,6 @@ const PAYMENT_TABLES = {
 //                      البيانات الافتراضية
 // ================================================================
 
-// جوائز العجلة الافتراضية
 const DEFAULT_PRIZES = [
     { name: '🎁 1000 SYP', description: 'الفوز بـ 1000 ليرة سورية', probability: 15, icon: '🎁', color: '#1a1a2e', color2: '#16213e' },
     { name: '🎁 500 SYP', description: 'الفوز بـ 500 ليرة سورية', probability: 20, icon: '🎁', color: '#2d1b3d', color2: '#1a0a0a' },
@@ -234,7 +230,6 @@ const DEFAULT_PRIZES = [
     { name: '⭐ 50 SYP', description: 'الفوز بـ 50 ليرة سورية', probability: 5, icon: '⭐', color: '#1a1a2a', color2: '#0f0f2a' }
 ];
 
-// إعدادات العجلة الافتراضية
 const DEFAULT_WHEEL_SETTINGS = [
     { key: 'spin_interval_hours', value: '24' },
     { key: 'is_active', value: 'true' },
@@ -247,7 +242,6 @@ const DEFAULT_WHEEL_SETTINGS = [
     { key: 'spin_duration', value: '3500' }
 ];
 
-// إعدادات SPINIX الافتراضية
 const DEFAULT_SPINIX_SETTINGS = [
     { key: 'bet_amount', value: '1000' },
     { key: 'max_floors', value: '13' },
@@ -267,7 +261,6 @@ const DEFAULT_SPINIX_SETTINGS = [
     { key: 'background_gradient_end', value: '#1a1a3e' }
 ];
 
-// مضاعفات SPINIX الافتراضية
 const DEFAULT_SPINIX_MULTIPLIERS = {
     1: 0.5, 2: 0.7, 3: 0.9, 4: 1.1, 5: 1.3,
     6: 1.5, 7: 1.7, 8: 3.0, 9: 5.0, 10: 7.0,
@@ -278,7 +271,6 @@ const DEFAULT_SPINIX_MULTIPLIERS = {
 //                      ===== دوال مساعدة =====
 // ================================================================
 
-// الحصول على إعداد من العجلة
 async function getWheelSetting(key) {
     const result = await pool.query(
         'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
@@ -287,7 +279,6 @@ async function getWheelSetting(key) {
     return result.rows[0]?.setting_value;
 }
 
-// الحصول على إعداد من SPINIX
 async function getSpinixSetting(key) {
     const result = await pool.query(
         'SELECT setting_value FROM spinix_settings WHERE setting_key = $1',
@@ -296,7 +287,6 @@ async function getSpinixSetting(key) {
     return result.rows[0]?.setting_value;
 }
 
-// الحصول على مضاعف SPINIX لطابق معين
 async function getSpinixMultiplier(floor) {
     const result = await pool.query(
         'SELECT setting_value FROM spinix_settings WHERE setting_key = $1',
@@ -305,7 +295,6 @@ async function getSpinixMultiplier(floor) {
     return parseFloat(result.rows[0]?.setting_value || 0);
 }
 
-// التحقق من شرط الإيداع للعجلة
 async function checkWheelDepositRequirement(user_id) {
     const depositRequired = await getWheelSetting('deposit_required');
     const isDepositRequired = depositRequired === 'true';
@@ -340,7 +329,6 @@ async function checkWheelDepositRequirement(user_id) {
     };
 }
 
-// التحقق من شرط الإيداع لـ SPINIX
 async function checkSpinixDepositRequirement(user_id) {
     const depositRequired = await getSpinixSetting('deposit_required');
     const isDepositRequired = depositRequired === 'true';
@@ -402,7 +390,6 @@ async function checkSpinixDepositRequirement(user_id) {
     };
 }
 
-// تحديث إحصائيات SPINIX للمستخدم
 async function updateSpinixStats(user_id, isWin, isLoss, profit, betAmount) {
     await pool.query(`
         INSERT INTO spinix_stats (user_id, total_games, total_wins, total_losses, total_bet_amount, total_win_amount, total_loss_amount)
@@ -426,7 +413,6 @@ async function updateSpinixStats(user_id, isWin, isLoss, profit, betAmount) {
     ]);
 }
 
-// تحديث الإحصائيات المجمعة لـ SPINIX
 async function updateAggregatedStats(periodType, gamesCount, betAmount, wins, winAmount, lossAmount) {
     const now = new Date();
     let periodKey;
@@ -460,53 +446,26 @@ function getWeekNumber(date) {
     return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 }
 
-// تسجيل نتيجة جولة SPINIX
 async function recordSpinixGameResult(user_id, gameData, resultData) {
     const {
-        result,           // 'loss', 'win', 'cashout'
-        profit,          
-        finalFloor,      
-        finalMultiplier, 
-        betAmount,       
-        totalFloors,     
-        successfulFloors,
-        failedFloor,     
-        cashoutAmount    
+        result, profit, finalFloor, finalMultiplier, 
+        betAmount, totalFloors, successfulFloors, failedFloor, cashoutAmount    
     } = resultData;
 
     try {
         const historyResult = await pool.query(`
             INSERT INTO spinix_history (
-                user_id,
-                bet_amount,
-                final_floor,
-                result,
-                result_type,
-                profit,
-                final_multiplier,
-                total_floors_played,
-                successful_floors,
-                failed_floor,
-                cashout_amount,
-                is_profit,
-                played_at,
-                updated_at
+                user_id, bet_amount, final_floor, result, result_type,
+                profit, final_multiplier, total_floors_played, successful_floors,
+                failed_floor, cashout_amount, is_profit,
+                played_at, updated_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id
         `, [
-            user_id,
-            betAmount,
-            finalFloor,
-            result,
-            result,
-            profit,
-            finalMultiplier,
-            totalFloors || 0,
-            successfulFloors || 0,
-            failedFloor || null,
-            cashoutAmount || 0,
-            profit > 0
+            user_id, betAmount, finalFloor, result, result,
+            profit, finalMultiplier, totalFloors || 0, successfulFloors || 0,
+            failedFloor || null, cashoutAmount || 0, profit > 0
         ]);
 
         return { success: true, historyId: historyResult.rows[0].id };
@@ -516,7 +475,6 @@ async function recordSpinixGameResult(user_id, gameData, resultData) {
     }
 }
 
-// تصفير حالة الإيداع لـ SPINIX
 async function resetSpinixDeposit(user_id) {
     console.log(`🔄 Reset deposit flag for user ${user_id}`);
 }
@@ -603,7 +561,6 @@ async function ensureTables() {
                     VALUES ($1, $2)
                 `, [setting.key, setting.value]);
             }
-            // إضافة المضاعفات الافتراضية
             for (const [floor, multiplier] of Object.entries(DEFAULT_SPINIX_MULTIPLIERS)) {
                 await client.query(`
                     INSERT INTO spinix_settings (setting_key, setting_value)
@@ -694,7 +651,6 @@ async function updateWheelTableSchema(client) {
 //                      ===== مسارات العجلة (Wheel) =====
 // ================================================================
 
-// -------------------- فحص الحالة --------------------
 app.get('/api/status', (req, res) => {
     res.json({
         status: 'running',
@@ -705,7 +661,6 @@ app.get('/api/status', (req, res) => {
     });
 });
 
-// -------------------- الصفحة الرئيسية --------------------
 app.get('/', (req, res) => {
     res.json({
         status: 'running',
@@ -758,7 +713,6 @@ app.get('/', (req, res) => {
 //                      مسارات العجلة (Wheel)
 // ================================================================
 
-// -------------------- النص العلوي (Banner) --------------------
 app.get('/api/banner', async (req, res) => {
     try {
         const result = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
@@ -802,42 +756,7 @@ app.put('/api/banner', async (req, res) => {
     }
 });
 
-// -------------------- إعدادات العجلة (مساران متوافقان) --------------------
-
-// المسار الجديد
-app.get('/api/admin/wheel/settings', async (req, res) => {
-    const { admin_id } = req.query;
-
-    if (parseInt(admin_id) !== ADMIN_ID) {
-        return res.status(403).json({
-            success: false,
-            error: 'Unauthorized - Admin only'
-        });
-    }
-
-    try {
-        const result = await pool.query('SELECT * FROM wheel_settings');
-        const settings = {};
-        result.rows.forEach(row => {
-            settings[row.setting_key] = row.setting_value;
-        });
-
-        const banner = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
-        settings.banner_text = banner.rows[0]?.text || '🎡 IChancy · عجلة الحظ';
-
-        res.json({
-            success: true,
-            settings
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ✅ المسار القديم (لتوافق الواجهة)
+// ✅ مسار إعدادات العجلة (متوافق مع الواجهة)
 app.get('/api/admin/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -858,14 +777,13 @@ app.get('/api/admin/settings', async (req, res) => {
         const banner = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
         settings.banner_text = banner.rows[0]?.text || '🎡 IChancy · عجلة الحظ';
 
-        console.log('📋 Settings loaded (legacy):', Object.keys(settings).length, 'keys');
+        console.log('📋 Settings loaded:', Object.keys(settings).length, 'keys');
         
         res.json({
             success: true,
             settings
         });
     } catch (error) {
-        console.error('❌ Error loading settings:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -873,56 +791,11 @@ app.get('/api/admin/settings', async (req, res) => {
     }
 });
 
-// المسار الجديد لتحديث الإعداد
-app.put('/api/admin/wheel/setting', async (req, res) => {
-    const { admin_id, key, value } = req.body;
-
-    if (parseInt(admin_id) !== ADMIN_ID) {
-        return res.status(403).json({
-            success: false,
-            error: 'Unauthorized - Admin only'
-        });
-    }
-
-    if (!key) {
-        return res.status(400).json({
-            success: false,
-            error: 'Key is required'
-        });
-    }
-
-    try {
-        if (key === 'banner_text') {
-            await pool.query(`
-                INSERT INTO wheel_banner (text, updated_at)
-                VALUES ($1, CURRENT_TIMESTAMP)
-            `, [value]);
-        } else {
-            await pool.query(`
-                INSERT INTO wheel_settings (setting_key, setting_value, updated_at)
-                VALUES ($1, $2, CURRENT_TIMESTAMP)
-                ON CONFLICT (setting_key) 
-                DO UPDATE SET setting_value = $2, updated_at = CURRENT_TIMESTAMP
-            `, [key, value]);
-        }
-
-        res.json({
-            success: true,
-            message: 'Setting updated successfully'
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ✅ المسار القديم لتحديث الإعداد (لتوافق الواجهة)
+// ✅ مسار تحديث إعداد العجلة (متوافق مع الواجهة)
 app.put('/api/admin/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
 
-    console.log(`📝 Updating setting (legacy): ${key} = ${value}`);
+    console.log(`📝 Updating setting: ${key} = ${value}`);
 
     if (parseInt(admin_id) !== ADMIN_ID) {
         return res.status(403).json({
@@ -961,6 +834,84 @@ app.put('/api/admin/setting', async (req, res) => {
         });
     } catch (error) {
         console.error(`❌ Error updating setting ${key}:`, error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ✅ مسار إعدادات العجلة (مسار إضافي للتوافق)
+app.get('/api/admin/wheel/settings', async (req, res) => {
+    const { admin_id } = req.query;
+
+    if (parseInt(admin_id) !== ADMIN_ID) {
+        return res.status(403).json({
+            success: false,
+            error: 'Unauthorized - Admin only'
+        });
+    }
+
+    try {
+        const result = await pool.query('SELECT * FROM wheel_settings');
+        const settings = {};
+        result.rows.forEach(row => {
+            settings[row.setting_key] = row.setting_value;
+        });
+
+        const banner = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
+        settings.banner_text = banner.rows[0]?.text || '🎡 IChancy · عجلة الحظ';
+
+        res.json({
+            success: true,
+            settings
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ✅ مسار تحديث إعداد العجلة (مسار إضافي للتوافق)
+app.put('/api/admin/wheel/setting', async (req, res) => {
+    const { admin_id, key, value } = req.body;
+
+    if (parseInt(admin_id) !== ADMIN_ID) {
+        return res.status(403).json({
+            success: false,
+            error: 'Unauthorized - Admin only'
+        });
+    }
+
+    if (!key) {
+        return res.status(400).json({
+            success: false,
+            error: 'Key is required'
+        });
+    }
+
+    try {
+        if (key === 'banner_text') {
+            await pool.query(`
+                INSERT INTO wheel_banner (text, updated_at)
+                VALUES ($1, CURRENT_TIMESTAMP)
+            `, [value]);
+        } else {
+            await pool.query(`
+                INSERT INTO wheel_settings (setting_key, setting_value, updated_at)
+                VALUES ($1, $2, CURRENT_TIMESTAMP)
+                ON CONFLICT (setting_key) 
+                DO UPDATE SET setting_value = $2, updated_at = CURRENT_TIMESTAMP
+            `, [key, value]);
+        }
+
+        res.json({
+            success: true,
+            message: 'Setting updated successfully'
+        });
+    } catch (error) {
         res.status(500).json({
             success: false,
             error: error.message
@@ -1267,7 +1218,6 @@ app.post('/api/wheel/spin', async (req, res) => {
     try {
         console.log(`🎡 Spin request for user: ${user_id}`);
 
-        // 1. التحقق من تفعيل العجلة
         const isActive = await getWheelSetting('is_active');
         if (isActive !== 'true') {
             return res.status(403).json({
@@ -1276,7 +1226,6 @@ app.post('/api/wheel/spin', async (req, res) => {
             });
         }
 
-        // 2. التحقق من شرط الإيداع
         const depositCheck = await checkWheelDepositRequirement(user_id);
         if (!depositCheck.canPlay) {
             return res.status(403).json({
@@ -1287,7 +1236,6 @@ app.post('/api/wheel/spin', async (req, res) => {
             });
         }
 
-        // 3. التحقق من آخر تدوير
         const intervalHours = parseInt(await getWheelSetting('spin_interval_hours') || 24);
 
         const lastSpin = await pool.query(`
@@ -1315,7 +1263,6 @@ app.post('/api/wheel/spin', async (req, res) => {
             }
         }
 
-        // 4. اختيار جائزة
         const prizes = await pool.query(`
             SELECT * FROM wheel_prizes 
             WHERE is_active = true
@@ -1340,14 +1287,12 @@ app.post('/api/wheel/spin', async (req, res) => {
             random -= parseFloat(prize.probability);
         }
 
-        // 5. تسجيل التدوير
         const result = await pool.query(`
             INSERT INTO wheel_spins (user_id, prize_id, prize_name, is_claimed)
             VALUES ($1, $2, $3, FALSE)
             RETURNING id, spin_date
         `, [user_id, selectedPrize.id, selectedPrize.name]);
 
-        // 6. إحصائيات المستخدم
         const userStats = await pool.query(`
             SELECT 
                 COUNT(*) as total_spins,
@@ -1456,7 +1401,6 @@ app.get('/api/wheel/history/:user_id', async (req, res) => {
 //                      ===== مسارات SPINIX =====
 // ================================================================
 
-// -------------------- حالة اللعبة --------------------
 app.get('/api/spinix/status', async (req, res) => {
     const { user_id } = req.query;
     
@@ -1538,7 +1482,6 @@ app.get('/api/spinix/status', async (req, res) => {
     }
 });
 
-// -------------------- بدء لعبة SPINIX --------------------
 app.post('/api/spinix/start', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1620,7 +1563,6 @@ app.post('/api/spinix/start', async (req, res) => {
     }
 });
 
-// -------------------- إفلات الطابق (Drop) --------------------
 app.post('/api/spinix/drop', async (req, res) => {
     const { user_id, floor_number, position_x, overlap_width, required_overlap } = req.body;
 
@@ -1772,7 +1714,6 @@ app.post('/api/spinix/drop', async (req, res) => {
     }
 });
 
-// -------------------- جمع الأرباح (Cashout) --------------------
 app.post('/api/spinix/cashout', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1865,7 +1806,6 @@ app.post('/api/spinix/cashout', async (req, res) => {
     }
 });
 
-// -------------------- تاريخ SPINIX --------------------
 app.get('/api/spinix/history/:user_id', async (req, res) => {
     const { user_id } = req.params;
     const { limit, offset } = req.query;
@@ -1876,18 +1816,9 @@ app.get('/api/spinix/history/:user_id', async (req, res) => {
     try {
         const history = await pool.query(`
             SELECT 
-                id,
-                bet_amount,
-                final_floor,
-                result,
-                profit,
-                final_multiplier,
-                total_floors_played,
-                successful_floors,
-                failed_floor,
-                cashout_amount,
-                is_profit,
-                played_at,
+                id, bet_amount, final_floor, result, profit, final_multiplier,
+                total_floors_played, successful_floors, failed_floor, cashout_amount,
+                is_profit, played_at,
                 CASE 
                     WHEN result = 'loss' THEN '💔 خسارة'
                     WHEN result = 'win' THEN '🏆 فوز كامل'
@@ -1943,7 +1874,6 @@ app.get('/api/spinix/history/:user_id', async (req, res) => {
     }
 });
 
-// -------------------- تفاصيل جولة SPINIX --------------------
 app.get('/api/spinix/game/:game_id', async (req, res) => {
     const { game_id } = req.params;
 
@@ -1969,13 +1899,8 @@ app.get('/api/spinix/game/:game_id', async (req, res) => {
 
         const floors = await pool.query(`
             SELECT 
-                floor_number,
-                position_x,
-                overlap_width,
-                required_overlap,
-                is_success,
-                multiplier,
-                profit_at_floor,
+                floor_number, position_x, overlap_width, required_overlap,
+                is_success, multiplier, profit_at_floor,
                 CASE 
                     WHEN is_success = true THEN '✅ نجاح'
                     ELSE '❌ فشل'
@@ -2012,7 +1937,6 @@ app.get('/api/spinix/game/:game_id', async (req, res) => {
 //                      ===== إدارة SPINIX =====
 // ================================================================
 
-// -------------------- إعدادات SPINIX --------------------
 app.get('/api/spinix/admin/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -2051,7 +1975,6 @@ app.get('/api/spinix/admin/settings', async (req, res) => {
     }
 });
 
-// -------------------- تحديث إعداد SPINIX --------------------
 app.put('/api/spinix/admin/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
 
@@ -2090,7 +2013,6 @@ app.put('/api/spinix/admin/setting', async (req, res) => {
     }
 });
 
-// -------------------- تحديث المضاعفات --------------------
 app.put('/api/spinix/admin/multipliers', async (req, res) => {
     const { admin_id, multipliers } = req.body;
 
@@ -2154,7 +2076,6 @@ app.put('/api/spinix/admin/multipliers', async (req, res) => {
     }
 });
 
-// -------------------- إحصائيات مفصلة SPINIX --------------------
 app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
     const { admin_id, period, limit, offset, user_id } = req.query;
 
@@ -2185,17 +2106,10 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
 
         let periodCondition = '';
         switch(periodType) {
-            case 'daily':
-                periodCondition = "DATE(played_at) = CURRENT_DATE";
-                break;
-            case 'weekly':
-                periodCondition = "DATE_PART('week', played_at) = DATE_PART('week', CURRENT_DATE) AND DATE_PART('year', played_at) = DATE_PART('year', CURRENT_DATE)";
-                break;
-            case 'monthly':
-                periodCondition = "DATE_TRUNC('month', played_at) = DATE_TRUNC('month', CURRENT_DATE)";
-                break;
-            default:
-                periodCondition = "1=1";
+            case 'daily': periodCondition = "DATE(played_at) = CURRENT_DATE"; break;
+            case 'weekly': periodCondition = "DATE_PART('week', played_at) = DATE_PART('week', CURRENT_DATE) AND DATE_PART('year', played_at) = DATE_PART('year', CURRENT_DATE)"; break;
+            case 'monthly': periodCondition = "DATE_TRUNC('month', played_at) = DATE_TRUNC('month', CURRENT_DATE)"; break;
+            default: periodCondition = "1=1";
         }
 
         const periodStats = await pool.query(`
@@ -2319,7 +2233,6 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
     }
 });
 
-// -------------------- إحصائيات موجزة SPINIX --------------------
 app.get('/api/spinix/admin/stats/summary', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -2444,7 +2357,6 @@ app.get('/api/spinix/admin/stats/summary', async (req, res) => {
     }
 });
 
-// -------------------- إحصائيات أسبوعية SPINIX --------------------
 app.get('/api/spinix/admin/stats/weekly', async (req, res) => {
     const { admin_id, weeks } = req.query;
 
@@ -2503,7 +2415,6 @@ app.get('/api/spinix/admin/stats/weekly', async (req, res) => {
     }
 });
 
-// -------------------- تصدير بيانات SPINIX --------------------
 app.get('/api/spinix/admin/export', async (req, res) => {
     const { admin_id, format, start_date, end_date } = req.query;
 
@@ -2549,16 +2460,9 @@ app.get('/api/spinix/admin/export', async (req, res) => {
             
             result.rows.forEach(row => {
                 csvRows.push([
-                    row.id,
-                    row.user_id,
-                    row.bet_amount,
-                    row.final_floor,
-                    row.result,
-                    row.profit,
-                    row.final_multiplier,
-                    row.played_at,
-                    row.total_floors,
-                    row.successful_floors
+                    row.id, row.user_id, row.bet_amount, row.final_floor,
+                    row.result, row.profit, row.final_multiplier, row.played_at,
+                    row.total_floors, row.successful_floors
                 ]);
             });
 

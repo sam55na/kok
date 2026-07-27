@@ -519,7 +519,6 @@ async function recordSpinixGameResult(user_id, gameData, resultData) {
 // تصفير حالة الإيداع لـ SPINIX
 async function resetSpinixDeposit(user_id) {
     console.log(`🔄 Reset deposit flag for user ${user_id}`);
-    // يتم التحقق من خلال hasConsumedRound في checkSpinixDepositRequirement
 }
 
 // ================================================================
@@ -803,7 +802,9 @@ app.put('/api/banner', async (req, res) => {
     }
 });
 
-// -------------------- إعدادات العجلة --------------------
+// -------------------- إعدادات العجلة (مساران متوافقان) --------------------
+
+// المسار الجديد
 app.get('/api/admin/wheel/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -836,6 +837,43 @@ app.get('/api/admin/wheel/settings', async (req, res) => {
     }
 });
 
+// ✅ المسار القديم (لتوافق الواجهة)
+app.get('/api/admin/settings', async (req, res) => {
+    const { admin_id } = req.query;
+
+    if (parseInt(admin_id) !== ADMIN_ID) {
+        return res.status(403).json({
+            success: false,
+            error: 'Unauthorized - Admin only'
+        });
+    }
+
+    try {
+        const result = await pool.query('SELECT * FROM wheel_settings');
+        const settings = {};
+        result.rows.forEach(row => {
+            settings[row.setting_key] = row.setting_value;
+        });
+
+        const banner = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
+        settings.banner_text = banner.rows[0]?.text || '🎡 IChancy · عجلة الحظ';
+
+        console.log('📋 Settings loaded (legacy):', Object.keys(settings).length, 'keys');
+        
+        res.json({
+            success: true,
+            settings
+        });
+    } catch (error) {
+        console.error('❌ Error loading settings:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// المسار الجديد لتحديث الإعداد
 app.put('/api/admin/wheel/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
 
@@ -873,6 +911,56 @@ app.put('/api/admin/wheel/setting', async (req, res) => {
             message: 'Setting updated successfully'
         });
     } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ✅ المسار القديم لتحديث الإعداد (لتوافق الواجهة)
+app.put('/api/admin/setting', async (req, res) => {
+    const { admin_id, key, value } = req.body;
+
+    console.log(`📝 Updating setting (legacy): ${key} = ${value}`);
+
+    if (parseInt(admin_id) !== ADMIN_ID) {
+        return res.status(403).json({
+            success: false,
+            error: 'Unauthorized - Admin only'
+        });
+    }
+
+    if (!key) {
+        return res.status(400).json({
+            success: false,
+            error: 'Key is required'
+        });
+    }
+
+    try {
+        if (key === 'banner_text') {
+            await pool.query(`
+                INSERT INTO wheel_banner (text, updated_at)
+                VALUES ($1, CURRENT_TIMESTAMP)
+            `, [value]);
+        } else {
+            await pool.query(`
+                INSERT INTO wheel_settings (setting_key, setting_value, updated_at)
+                VALUES ($1, $2, CURRENT_TIMESTAMP)
+                ON CONFLICT (setting_key) 
+                DO UPDATE SET setting_value = $2, updated_at = CURRENT_TIMESTAMP
+            `, [key, value]);
+        }
+
+        console.log(`✅ Setting ${key} updated successfully`);
+        
+        res.json({
+            success: true,
+            message: 'Setting updated successfully'
+        });
+    } catch (error) {
+        console.error(`❌ Error updating setting ${key}:`, error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -1380,7 +1468,6 @@ app.get('/api/spinix/status', async (req, res) => {
     }
 
     try {
-        // 1. التحقق من تفعيل اللعبة
         const isActive = await getSpinixSetting('is_active');
         if (isActive !== 'true') {
             return res.status(403).json({
@@ -1389,16 +1476,13 @@ app.get('/api/spinix/status', async (req, res) => {
             });
         }
 
-        // 2. التحقق من شرط الإيداع
         const depositCheck = await checkSpinixDepositRequirement(user_id);
         
-        // 3. التحقق من وجود جولة نشطة
         const activeGame = await pool.query(`
             SELECT * FROM spinix_games 
             WHERE user_id = $1 AND is_active = true
         `, [user_id]);
 
-        // 4. آخر جولة
         const lastGame = await pool.query(`
             SELECT * FROM spinix_history 
             WHERE user_id = $1 
@@ -1406,7 +1490,6 @@ app.get('/api/spinix/status', async (req, res) => {
             LIMIT 1
         `, [user_id]);
 
-        // 5. الإحصائيات
         const stats = await pool.query(`
             SELECT 
                 COALESCE(SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END), 0) as wins,
@@ -1417,7 +1500,6 @@ app.get('/api/spinix/status', async (req, res) => {
             WHERE user_id = $1
         `, [user_id]);
 
-        // 6. تحديد إمكانية اللعب
         let canPlay = false;
         let reason = '';
         
@@ -1468,7 +1550,6 @@ app.post('/api/spinix/start', async (req, res) => {
     }
 
     try {
-        // 1. التحقق من تفعيل اللعبة
         const isActive = await getSpinixSetting('is_active');
         if (isActive !== 'true') {
             return res.status(403).json({
@@ -1477,7 +1558,6 @@ app.post('/api/spinix/start', async (req, res) => {
             });
         }
 
-        // 2. التحقق من شرط الإيداع
         const depositCheck = await checkSpinixDepositRequirement(user_id);
         if (!depositCheck.canPlay) {
             return res.status(403).json({
@@ -1488,10 +1568,8 @@ app.post('/api/spinix/start', async (req, res) => {
             });
         }
 
-        // 3. الحصول على مبلغ الرهان
         const betAmount = parseFloat(await getSpinixSetting('bet_amount') || 1000);
 
-        // 4. التحقق من جولة نشطة
         const activeGame = await pool.query(`
             SELECT * FROM spinix_games 
             WHERE user_id = $1 AND is_active = true
@@ -1505,14 +1583,12 @@ app.post('/api/spinix/start', async (req, res) => {
             });
         }
 
-        // 5. بدء الجولة
         const result = await pool.query(`
             INSERT INTO spinix_games (user_id, bet_amount, current_floor, pending_profit, current_multiplier)
             VALUES ($1, $2, 0, 0, 0)
             RETURNING *
         `, [user_id, betAmount]);
 
-        // 6. تحديث الإحصائيات
         await pool.query(`
             INSERT INTO spinix_stats (user_id, total_games, total_bet_amount)
             VALUES ($1, 1, $2)
@@ -1523,7 +1599,6 @@ app.post('/api/spinix/start', async (req, res) => {
                 updated_at = CURRENT_TIMESTAMP
         `, [user_id, betAmount]);
 
-        // 7. تحديث الإحصائيات المجمعة
         await updateAggregatedStats('daily', 1, betAmount, 0, 0, 0);
 
         console.log(`🎮 SPINIX game started for user ${user_id}, bet: ${betAmount}`);
@@ -1557,12 +1632,10 @@ app.post('/api/spinix/drop', async (req, res) => {
     }
 
     try {
-        // الحصول على الإعدادات
         const betAmount = parseFloat(await getSpinixSetting('bet_amount') || 1000);
         const maxFloor = parseInt(await getSpinixSetting('max_floors') || 13);
         const minOverlap = parseFloat(await getSpinixSetting('min_required_overlap') || 0.5);
 
-        // الحصول على الجولة النشطة
         const gameResult = await pool.query(`
             SELECT * FROM spinix_games 
             WHERE user_id = $1 AND is_active = true
@@ -1578,7 +1651,6 @@ app.post('/api/spinix/drop', async (req, res) => {
         const game = gameResult.rows[0];
         const currentFloor = game.current_floor;
 
-        // التحقق من صحة الطابق
         if (floor_number !== currentFloor + 1) {
             return res.status(400).json({
                 success: false,
@@ -1586,12 +1658,10 @@ app.post('/api/spinix/drop', async (req, res) => {
             });
         }
 
-        // الحصول على المضاعف
         const multiplier = await getSpinixMultiplier(floor_number);
         const isSuccess = overlap_width >= (required_overlap || minOverlap);
         const profit = isSuccess ? betAmount * multiplier : 0;
 
-        // تسجيل تفاصيل الطابق
         await pool.query(`
             INSERT INTO spinix_game_details 
             (game_id, user_id, floor_number, position_x, overlap_width, required_overlap, is_success, multiplier, profit_at_floor)
@@ -1600,7 +1670,6 @@ app.post('/api/spinix/drop', async (req, res) => {
 
         if (isSuccess) {
             if (floor_number >= maxFloor) {
-                // === أكمل البرج بالكامل (WIN) ===
                 await pool.query(`
                     UPDATE spinix_games 
                     SET is_active = false, 
@@ -1611,7 +1680,6 @@ app.post('/api/spinix/drop', async (req, res) => {
                     WHERE user_id = $4
                 `, [floor_number, profit, multiplier, user_id]);
 
-                // تسجيل النتيجة
                 await recordSpinixGameResult(user_id, game, {
                     result: 'win',
                     profit: profit,
@@ -1637,7 +1705,6 @@ app.post('/api/spinix/drop', async (req, res) => {
                     message: '🏆 أكملت البرج بالكامل! تهانينا!'
                 });
             } else {
-                // === استمرار الجولة ===
                 await pool.query(`
                     UPDATE spinix_games 
                     SET current_floor = $1,
@@ -1657,7 +1724,6 @@ app.post('/api/spinix/drop', async (req, res) => {
                 });
             }
         } else {
-            // === الخسارة (LOSS) ===
             await pool.query(`
                 UPDATE spinix_games 
                 SET is_active = false,
@@ -1667,7 +1733,6 @@ app.post('/api/spinix/drop', async (req, res) => {
 
             const successfulFloors = floor_number - 1;
 
-            // تسجيل النتيجة
             await recordSpinixGameResult(user_id, game, {
                 result: 'loss',
                 profit: -betAmount,
@@ -1721,7 +1786,6 @@ app.post('/api/spinix/cashout', async (req, res) => {
     try {
         const betAmount = parseFloat(await getSpinixSetting('bet_amount') || 1000);
 
-        // الحصول على الجولة النشطة
         const gameResult = await pool.query(`
             SELECT * FROM spinix_games 
             WHERE user_id = $1 AND is_active = true
@@ -1744,7 +1808,6 @@ app.post('/api/spinix/cashout', async (req, res) => {
             });
         }
 
-        // إنهاء الجولة
         await pool.query(`
             UPDATE spinix_games 
             SET is_active = false,
@@ -1752,7 +1815,6 @@ app.post('/api/spinix/cashout', async (req, res) => {
             WHERE user_id = $1
         `, [user_id]);
 
-        // الحصول على عدد الطوابق
         const floorsCount = await pool.query(`
             SELECT COUNT(*) as count, 
                    COUNT(CASE WHEN is_success = true THEN 1 END) as success_count
@@ -1763,7 +1825,6 @@ app.post('/api/spinix/cashout', async (req, res) => {
         const totalFloors = parseInt(floorsCount.rows[0]?.count || 0);
         const successfulFloors = parseInt(floorsCount.rows[0]?.success_count || 0);
 
-        // تسجيل النتيجة
         await recordSpinixGameResult(user_id, game, {
             result: 'cashout',
             profit: profit,
@@ -2109,7 +2170,6 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
     const periodType = period || 'daily';
 
     try {
-        // الإحصائيات العامة
         const generalStats = await pool.query(`
             SELECT 
                 COUNT(*) as total_games,
@@ -2123,7 +2183,6 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
             FROM spinix_history
         `, []);
 
-        // الإحصائيات حسب الفترة
         let periodCondition = '';
         switch(periodType) {
             case 'daily':
@@ -2153,7 +2212,6 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
             WHERE ${periodCondition}
         `, []);
 
-        // الجولات
         let userFilter = user_id ? `WHERE user_id = $${user_id ? '1' : ''}` : '';
         let queryParams = [];
         
@@ -2174,7 +2232,6 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
 
         const gamesResult = await pool.query(gamesQuery, queryParams);
 
-        // تفاصيل الطوابق
         const gameIds = gamesResult.rows.map(g => g.id);
         let floorDetails = [];
         
@@ -2187,7 +2244,6 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
             floorDetails = detailsResult.rows;
         }
 
-        // أفضل اللاعبين
         const topPlayers = await pool.query(`
             SELECT 
                 user_id,
@@ -2202,7 +2258,6 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
             LIMIT 10
         `, []);
 
-        // إحصائيات المضاعفات
         const multiplierStats = await pool.query(`
             SELECT 
                 final_multiplier,

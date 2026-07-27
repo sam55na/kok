@@ -42,7 +42,7 @@ const ADMIN_ID = 7011476249;
 let dbReady = false;
 
 // ================================================================
-//                      ===== إنشاء الجداول =====
+//                      ===== تعريف الجداول =====
 // ================================================================
 
 const WHEEL_TABLES = {
@@ -218,7 +218,7 @@ const PAYMENT_TABLES = {
 };
 
 // ================================================================
-//                      البيانات الافتراضية
+//                      ===== البيانات الافتراضية =====
 // ================================================================
 
 const DEFAULT_PRIZES = [
@@ -413,7 +413,7 @@ async function updateSpinixStats(user_id, isWin, isLoss, profit, betAmount) {
     ]);
 }
 
-async function updateAggregatedStats(periodType, gamesCount, betAmount, wins, winAmount, lossAmount) {
+async function updateAggregatedStats(periodType, gamesCount, betAmount, wins, winAmount, lossAmount, cashouts, players) {
     const now = new Date();
     let periodKey;
     
@@ -425,8 +425,12 @@ async function updateAggregatedStats(periodType, gamesCount, betAmount, wins, wi
     }
 
     await pool.query(`
-        INSERT INTO spinix_aggregated_stats (period_type, period_key, total_games, total_bet_amount, total_wins, total_win_amount, total_loss_amount)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO spinix_aggregated_stats (
+            period_type, period_key, 
+            total_games, total_bet_amount, total_wins, total_win_amount, 
+            total_loss_amount, total_cashouts, total_players
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (period_type, period_key) 
         DO UPDATE SET 
             total_games = spinix_aggregated_stats.total_games + $3,
@@ -434,8 +438,10 @@ async function updateAggregatedStats(periodType, gamesCount, betAmount, wins, wi
             total_wins = spinix_aggregated_stats.total_wins + $5,
             total_win_amount = spinix_aggregated_stats.total_win_amount + $6,
             total_loss_amount = spinix_aggregated_stats.total_loss_amount + $7,
+            total_cashouts = spinix_aggregated_stats.total_cashouts + $8,
+            total_players = spinix_aggregated_stats.total_players + $9,
             updated_at = CURRENT_TIMESTAMP
-    `, [periodType, periodKey, gamesCount, betAmount, wins || 0, winAmount || 0, lossAmount || 0]);
+    `, [periodType, periodKey, gamesCount, betAmount, wins || 0, winAmount || 0, lossAmount || 0, cashouts || 0, players || 0]);
 }
 
 function getWeekNumber(date) {
@@ -648,7 +654,7 @@ async function updateWheelTableSchema(client) {
 }
 
 // ================================================================
-//                      ===== مسارات العجلة (Wheel) =====
+//                      ===== المسارات العامة =====
 // ================================================================
 
 app.get('/api/status', (req, res) => {
@@ -671,7 +677,19 @@ app.get('/', (req, res) => {
                 endpoints: {
                     spin: 'POST /api/wheel/spin',
                     history: 'GET /api/wheel/history/:user_id',
-                    prizes: 'GET /api/prizes'
+                    prizes: 'GET /api/prizes',
+                    banner: 'GET /api/banner'
+                },
+                admin: {
+                    settings: 'GET /api/admin/wheel/settings',
+                    setting: 'PUT /api/admin/wheel/setting',
+                    prizes: 'GET /api/admin/wheel/prizes',
+                    add_prize: 'POST /api/admin/wheel/prizes',
+                    update_prize: 'PUT /api/admin/wheel/prizes/:prize_id',
+                    delete_prize: 'DELETE /api/admin/wheel/prizes/:prize_id',
+                    seed_prizes: 'POST /api/admin/wheel/seed-prizes',
+                    reset_spins: 'POST /api/admin/wheel/reset-spins',
+                    banner: 'PUT /api/banner'
                 }
             },
             spinix: {
@@ -682,20 +700,8 @@ app.get('/', (req, res) => {
                     cashout: 'POST /api/spinix/cashout',
                     history: 'GET /api/spinix/history/:user_id',
                     game: 'GET /api/spinix/game/:game_id'
-                }
-            },
-            admin: {
-                wheel: {
-                    settings: 'GET /api/admin/wheel/settings',
-                    setting: 'PUT /api/admin/wheel/setting',
-                    prizes: 'GET /api/admin/wheel/prizes',
-                    add_prize: 'POST /api/admin/wheel/prizes',
-                    update_prize: 'PUT /api/admin/wheel/prizes/:prize_id',
-                    delete_prize: 'DELETE /api/admin/wheel/prizes/:prize_id',
-                    seed_prizes: 'POST /api/admin/wheel/seed-prizes',
-                    reset_spins: 'POST /api/admin/wheel/reset-spins'
                 },
-                spinix: {
+                admin: {
                     settings: 'GET /api/spinix/admin/settings',
                     setting: 'PUT /api/spinix/admin/setting',
                     multipliers: 'PUT /api/spinix/admin/multipliers',
@@ -710,9 +716,10 @@ app.get('/', (req, res) => {
 });
 
 // ================================================================
-//                      مسارات العجلة (Wheel)
+//                      ===== مسارات العجلة (WHEEL) =====
 // ================================================================
 
+// ----- مسارات النص العلوي (Banner) -----
 app.get('/api/banner', async (req, res) => {
     try {
         const result = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
@@ -756,7 +763,7 @@ app.put('/api/banner', async (req, res) => {
     }
 });
 
-// ✅ مسار إعدادات العجلة (متوافق مع الواجهة)
+// ----- إعدادات العجلة (مسار متوافق مع الواجهة القديمة) -----
 app.get('/api/admin/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -777,8 +784,6 @@ app.get('/api/admin/settings', async (req, res) => {
         const banner = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
         settings.banner_text = banner.rows[0]?.text || '🎡 IChancy · عجلة الحظ';
 
-        console.log('📋 Settings loaded:', Object.keys(settings).length, 'keys');
-        
         res.json({
             success: true,
             settings
@@ -791,11 +796,8 @@ app.get('/api/admin/settings', async (req, res) => {
     }
 });
 
-// ✅ مسار تحديث إعداد العجلة (متوافق مع الواجهة)
 app.put('/api/admin/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
-
-    console.log(`📝 Updating setting: ${key} = ${value}`);
 
     if (parseInt(admin_id) !== ADMIN_ID) {
         return res.status(403).json({
@@ -826,14 +828,11 @@ app.put('/api/admin/setting', async (req, res) => {
             `, [key, value]);
         }
 
-        console.log(`✅ Setting ${key} updated successfully`);
-        
         res.json({
             success: true,
             message: 'Setting updated successfully'
         });
     } catch (error) {
-        console.error(`❌ Error updating setting ${key}:`, error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -841,7 +840,7 @@ app.put('/api/admin/setting', async (req, res) => {
     }
 });
 
-// ✅ مسار إعدادات العجلة (مسار إضافي للتوافق)
+// ----- إعدادات العجلة (مسارات جديدة منظمة) -----
 app.get('/api/admin/wheel/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -874,7 +873,6 @@ app.get('/api/admin/wheel/settings', async (req, res) => {
     }
 });
 
-// ✅ مسار تحديث إعداد العجلة (مسار إضافي للتوافق)
 app.put('/api/admin/wheel/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
 
@@ -919,20 +917,12 @@ app.put('/api/admin/wheel/setting', async (req, res) => {
     }
 });
 
-// -------------------- جوائز العجلة --------------------
-app.get('/api/admin/wheel/prizes', async (req, res) => {
-    const { admin_id } = req.query;
-
-    if (parseInt(admin_id) !== ADMIN_ID) {
-        return res.status(403).json({
-            success: false,
-            error: 'Unauthorized - Admin only'
-        });
-    }
-
+// ----- جوائز العجلة -----
+app.get('/api/prizes', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT * FROM wheel_prizes 
+            WHERE is_active = true
             ORDER BY id ASC
         `);
         
@@ -948,11 +938,19 @@ app.get('/api/admin/wheel/prizes', async (req, res) => {
     }
 });
 
-app.get('/api/prizes', async (req, res) => {
+app.get('/api/admin/wheel/prizes', async (req, res) => {
+    const { admin_id } = req.query;
+
+    if (parseInt(admin_id) !== ADMIN_ID) {
+        return res.status(403).json({
+            success: false,
+            error: 'Unauthorized - Admin only'
+        });
+    }
+
     try {
         const result = await pool.query(`
             SELECT * FROM wheel_prizes 
-            WHERE is_active = true
             ORDER BY id ASC
         `);
         
@@ -1197,7 +1195,7 @@ app.post('/api/admin/wheel/reset-spins', async (req, res) => {
     }
 });
 
-// -------------------- تدوير العجلة --------------------
+// ----- تدوير العجلة -----
 app.post('/api/wheel/spin', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1323,7 +1321,7 @@ app.post('/api/wheel/spin', async (req, res) => {
     }
 });
 
-// -------------------- سجل العجلة --------------------
+// ----- سجل العجلة -----
 app.get('/api/wheel/history/:user_id', async (req, res) => {
     const { user_id } = req.params;
 
@@ -1401,6 +1399,7 @@ app.get('/api/wheel/history/:user_id', async (req, res) => {
 //                      ===== مسارات SPINIX =====
 // ================================================================
 
+// ----- حالة اللعبة -----
 app.get('/api/spinix/status', async (req, res) => {
     const { user_id } = req.query;
     
@@ -1482,6 +1481,7 @@ app.get('/api/spinix/status', async (req, res) => {
     }
 });
 
+// ----- بدء جولة جديدة -----
 app.post('/api/spinix/start', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1542,7 +1542,7 @@ app.post('/api/spinix/start', async (req, res) => {
                 updated_at = CURRENT_TIMESTAMP
         `, [user_id, betAmount]);
 
-        await updateAggregatedStats('daily', 1, betAmount, 0, 0, 0);
+        await updateAggregatedStats('daily', 1, betAmount, 0, 0, 0, 0, 1);
 
         console.log(`🎮 SPINIX game started for user ${user_id}, bet: ${betAmount}`);
 
@@ -1563,6 +1563,7 @@ app.post('/api/spinix/start', async (req, res) => {
     }
 });
 
+// ----- تنفيذ رمي على طابق -----
 app.post('/api/spinix/drop', async (req, res) => {
     const { user_id, floor_number, position_x, overlap_width, required_overlap } = req.body;
 
@@ -1635,7 +1636,7 @@ app.post('/api/spinix/drop', async (req, res) => {
                 });
 
                 await updateSpinixStats(user_id, true, false, profit, betAmount);
-                await updateAggregatedStats('daily', 0, 0, 1, profit, 0);
+                await updateAggregatedStats('daily', 0, 0, 1, profit, 0, 0, 0);
                 await resetSpinixDeposit(user_id);
 
                 return res.json({
@@ -1688,7 +1689,7 @@ app.post('/api/spinix/drop', async (req, res) => {
             });
 
             await updateSpinixStats(user_id, false, true, 0, betAmount);
-            await updateAggregatedStats('daily', 0, betAmount, 0, 0, betAmount);
+            await updateAggregatedStats('daily', 0, betAmount, 0, 0, betAmount, 0, 0);
             await resetSpinixDeposit(user_id);
 
             return res.json({
@@ -1714,6 +1715,7 @@ app.post('/api/spinix/drop', async (req, res) => {
     }
 });
 
+// ----- جمع الأرباح -----
 app.post('/api/spinix/cashout', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1779,7 +1781,7 @@ app.post('/api/spinix/cashout', async (req, res) => {
         });
 
         await updateSpinixStats(user_id, true, false, profit, betAmount);
-        await updateAggregatedStats('daily', 0, 0, 1, profit, 0);
+        await updateAggregatedStats('daily', 0, 0, 0, profit, 0, 1, 0);
         await resetSpinixDeposit(user_id);
 
         res.json({
@@ -1806,6 +1808,7 @@ app.post('/api/spinix/cashout', async (req, res) => {
     }
 });
 
+// ----- سجل المستخدم -----
 app.get('/api/spinix/history/:user_id', async (req, res) => {
     const { user_id } = req.params;
     const { limit, offset } = req.query;
@@ -1874,6 +1877,7 @@ app.get('/api/spinix/history/:user_id', async (req, res) => {
     }
 });
 
+// ----- تفاصيل جولة محددة -----
 app.get('/api/spinix/game/:game_id', async (req, res) => {
     const { game_id } = req.params;
 
@@ -1937,6 +1941,7 @@ app.get('/api/spinix/game/:game_id', async (req, res) => {
 //                      ===== إدارة SPINIX =====
 // ================================================================
 
+// ----- عرض الإعدادات والمضاعفات -----
 app.get('/api/spinix/admin/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -1975,6 +1980,7 @@ app.get('/api/spinix/admin/settings', async (req, res) => {
     }
 });
 
+// ----- تحديث إعداد -----
 app.put('/api/spinix/admin/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
 
@@ -2013,6 +2019,7 @@ app.put('/api/spinix/admin/setting', async (req, res) => {
     }
 });
 
+// ----- تحديث المضاعفات -----
 app.put('/api/spinix/admin/multipliers', async (req, res) => {
     const { admin_id, multipliers } = req.body;
 
@@ -2076,6 +2083,7 @@ app.put('/api/spinix/admin/multipliers', async (req, res) => {
     }
 });
 
+// ----- إحصائيات تفصيلية -----
 app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
     const { admin_id, period, limit, offset, user_id } = req.query;
 
@@ -2233,6 +2241,7 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
     }
 });
 
+// ----- ملخص الإحصائيات -----
 app.get('/api/spinix/admin/stats/summary', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -2357,6 +2366,7 @@ app.get('/api/spinix/admin/stats/summary', async (req, res) => {
     }
 });
 
+// ----- إحصائيات أسبوعية -----
 app.get('/api/spinix/admin/stats/weekly', async (req, res) => {
     const { admin_id, weeks } = req.query;
 
@@ -2415,6 +2425,7 @@ app.get('/api/spinix/admin/stats/weekly', async (req, res) => {
     }
 });
 
+// ----- تصدير البيانات -----
 app.get('/api/spinix/admin/export', async (req, res) => {
     const { admin_id, format, start_date, end_date } = req.query;
 
@@ -2503,9 +2514,14 @@ async function startServer() {
     app.listen(port, () => {
         console.log(`\n✅ الخادم يعمل على المنفذ ${port}`);
         console.log(`🔗 فحص الحالة: http://localhost:${port}/api/status`);
-        console.log(`🔗 جوائز العجلة: http://localhost:${port}/api/prizes`);
-        console.log(`🔗 إدارة العجلة: http://localhost:${port}/api/admin/wheel/prizes?admin_id=${ADMIN_ID}`);
-        console.log(`🔗 إدارة SPINIX: http://localhost:${port}/api/spinix/admin/settings?admin_id=${ADMIN_ID}`);
+        console.log(`\n🎡 مسارات العجلة:`);
+        console.log(`   🔗 الجوائز: http://localhost:${port}/api/prizes`);
+        console.log(`   🔗 تدوير: POST http://localhost:${port}/api/wheel/spin`);
+        console.log(`   🔗 إدارة: http://localhost:${port}/api/admin/wheel/prizes?admin_id=${ADMIN_ID}`);
+        console.log(`\n🎮 مسارات SPINIX:`);
+        console.log(`   🔗 الحالة: http://localhost:${port}/api/spinix/status?user_id=123`);
+        console.log(`   🔗 بدء: POST http://localhost:${port}/api/spinix/start`);
+        console.log(`   🔗 إدارة: http://localhost:${port}/api/spinix/admin/settings?admin_id=${ADMIN_ID}`);
         console.log('\n📋 ===== جاهز! =====\n');
     });
 }

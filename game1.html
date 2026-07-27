@@ -1,0 +1,2260 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SPINIX | Golden Tower</title>
+    <style>
+        /* ================================================================
+           CSS المتقدم للعبة SPINIX
+           ================================================================ */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Poppins', 'Cairo', system-ui, sans-serif;
+        }
+
+        /* خلفية متحركة */
+        body {
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 40%, #0f1a2e 100%);
+            color: #fff;
+        }
+
+        /* ===== شاشة التحميل ===== */
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 40%, #0f1a2e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.8s ease;
+        }
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-container {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinix-logo-loading {
+            font-size: 72px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FFD700, #FF6B35, #FFD700);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: logoGlow 2.5s ease-in-out infinite;
+            margin-bottom: 20px;
+            text-shadow: 0 0 60px rgba(255, 215, 0, 0.2);
+        }
+
+        @keyframes logoGlow {
+            0%, 100% { background-position: 0% 50%; transform: scale(1); }
+            50% { background-position: 100% 50%; transform: scale(1.08); }
+        }
+
+        .loading-subtitle {
+            font-size: 18px;
+            color: rgba(255, 215, 0, 0.6);
+            letter-spacing: 4px;
+            margin-bottom: 30px;
+        }
+
+        .loading-spinner-gold {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 215, 0, 0.1);
+            border-top: 3px solid #FFD700;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 20px auto;
+        }
+
+        .progress-container {
+            width: 280px;
+            margin: 20px auto;
+        }
+
+        .progress-bar-outer {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 215, 0, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-inner {
+            height: 100%;
+            background: linear-gradient(90deg, #FFD700, #FF6B35);
+            width: 0%;
+            transition: width 0.4s ease;
+            border-radius: 10px;
+        }
+
+        .progress-percentage {
+            font-size: 13px;
+            color: rgba(255, 215, 0, 0.5);
+            margin-top: 8px;
+            font-weight: 600;
+        }
+
+        .loading-status {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.3);
+            margin-top: 12px;
+        }
+
+        /* ===== حاوية اللعبة ===== */
+        .game-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            pointer-events: none;
+        }
+        .game-wrapper.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* ===== الهيدر ===== */
+        .game-header {
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.7), rgba(26, 26, 62, 0.5));
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .header-logo {
+            font-size: 18px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FFD700, #FF6B35);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: 1px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-balance {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 215, 0, 0.08);
+            padding: 5px 14px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 215, 0, 0.15);
+        }
+        .header-balance-value {
+            font-size: 15px;
+            font-weight: 800;
+            color: #FFD700;
+        }
+
+        .admin-stats-btn {
+            background: rgba(52, 152, 219, 0.15);
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            color: #3498db;
+            padding: 4px 12px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .admin-stats-btn:hover {
+            background: #3498db;
+            color: #fff;
+        }
+
+        /* ===== منطقة الرسم ===== */
+        .game-canvas-area {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(ellipse at center bottom, #1a2a4a 0%, #0a0e27 100%);
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /* خلفية نجوم متحركة */
+        .stars-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: #fff;
+            border-radius: 50%;
+            animation: twinkle var(--duration) ease-in-out infinite alternate;
+        }
+        @keyframes twinkle {
+            0% { opacity: 0.2; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); }
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+            cursor: pointer;
+        }
+
+        /* ===== سرعة ===== */
+        .speed-indicator {
+            position: absolute;
+            bottom: 80px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(8px);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            color: #FFD700;
+            border: 1px solid rgba(255, 215, 0, 0.1);
+            pointer-events: none;
+            z-index: 5;
+            font-weight: 600;
+        }
+
+        /* ===== تأثيرات ===== */
+        .dust-effect {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10;
+            animation: dustExpand 0.7s ease-out forwards;
+        }
+        @keyframes dustExpand {
+            0% { transform: scale(0.3); opacity: 0.8; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        .multiplier-popup {
+            position: absolute;
+            font-size: 52px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FFD700, #FF6B35);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 40px rgba(255, 215, 0, 0.3);
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 10;
+            animation: multiplierFloat 1.4s ease-out forwards;
+        }
+        @keyframes multiplierFloat {
+            0% { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+            30% { transform: translate(-50%, -70%) scale(1.4); opacity: 1; }
+            100% { transform: translate(-50%, -130%) scale(1.8); opacity: 0; }
+        }
+
+        .shake {
+            animation: shakeAnim 0.35s ease-in-out 0s 2;
+        }
+        @keyframes shakeAnim {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(4px, 3px); }
+            75% { transform: translate(-4px, -3px); }
+        }
+
+        /* ===== طبقة اختيار الرهان ===== */
+        .bet-selection-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(16px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            transition: all 0.4s ease;
+        }
+        .bet-selection-overlay.hidden {
+            display: none;
+        }
+
+        .bet-selection-container {
+            text-align: center;
+            padding: 30px 24px;
+            background: linear-gradient(145deg, rgba(30, 30, 60, 0.95), rgba(20, 20, 50, 0.95));
+            border-radius: 30px;
+            border: 2px solid rgba(255, 215, 0, 0.2);
+            box-shadow: 0 0 60px rgba(255, 215, 0, 0.1);
+            width: 92%;
+            max-width: 400px;
+            animation: modalPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes modalPop {
+            0% { transform: scale(0.85) translateY(20px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .bet-selection-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: #FFD700;
+            margin-bottom: 6px;
+        }
+        .bet-selection-sub {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+            margin-bottom: 20px;
+        }
+
+        .bet-selection-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .bet-selection-chip {
+            background: rgba(255, 215, 0, 0.05);
+            border: 2px solid rgba(255, 215, 0, 0.15);
+            color: #FFD700;
+            padding: 14px 8px;
+            border-radius: 16px;
+            font-weight: 800;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+        }
+        .bet-selection-chip:active { transform: scale(0.95); }
+        .bet-selection-chip.selected {
+            background: linear-gradient(135deg, #FFD700, #FF6B35);
+            color: #000;
+            border-color: #FFD700;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
+        }
+
+        .start-game-btn {
+            background: linear-gradient(135deg, #FFD700, #FF6B35);
+            color: #000;
+            border: none;
+            padding: 16px 30px;
+            border-radius: 60px;
+            font-weight: 800;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.15s;
+            width: 100%;
+            font-family: inherit;
+        }
+        .start-game-btn:active { transform: scale(0.97); }
+        .start-game-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ===== الشريط السفلي ===== */
+        .game-bottom-bar {
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.85), rgba(26, 26, 62, 0.6));
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 215, 0, 0.08);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-shrink: 0;
+            z-index: 10;
+            flex-wrap: wrap;
+        }
+
+        .multiplier-box {
+            background: rgba(255, 215, 0, 0.05);
+            padding: 8px 16px;
+            border-radius: 30px;
+            text-align: center;
+            border: 1px solid rgba(255, 215, 0, 0.1);
+            min-width: 80px;
+        }
+        .multiplier-label {
+            font-size: 9px;
+            color: rgba(255, 215, 0, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .multiplier-value {
+            font-size: 20px;
+            font-weight: 800;
+            color: #FFD700;
+        }
+
+        .game-button {
+            border: none;
+            font-weight: 800;
+            padding: 10px 24px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+            font-size: 16px;
+            white-space: nowrap;
+        }
+        .game-button:active { transform: scale(0.95); }
+        .game-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .drop-button {
+            background: linear-gradient(135deg, #FFD700, #FF6B35);
+            color: #000;
+        }
+        .cashout-button {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: #fff;
+            position: relative;
+        }
+        .cashout-amount {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #FFD700;
+            color: #000;
+            font-size: 10px;
+            font-weight: 900;
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
+
+        /* ===== حالة اللعبة ===== */
+        .game-status {
+            background: rgba(0, 0, 0, 0.3);
+            text-align: center;
+            padding: 5px 12px;
+            font-size: 11px;
+            color: rgba(255, 215, 0, 0.5);
+            border-top: 1px solid rgba(255, 215, 0, 0.05);
+            flex-shrink: 0;
+            z-index: 10;
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .game-status .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.ready { background: #2ecc71; }
+        .status-dot.playing { background: #FFD700; animation: pulse 0.8s infinite; }
+        .status-dot.waiting { background: #f39c12; }
+        .status-dot.error { background: #e74c3c; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.7); }
+        }
+
+        /* ===== الإشعارات ===== */
+        .notification-container {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none;
+            width: 92%;
+            max-width: 420px;
+        }
+        .notification {
+            background: rgba(0, 0, 0, 0.92);
+            backdrop-filter: blur(16px);
+            border-radius: 60px;
+            padding: 12px 22px;
+            width: 100%;
+            text-align: center;
+            font-weight: 700;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            border: 2px solid;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+            animation: notifIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            pointer-events: auto;
+        }
+        @keyframes notifIn {
+            0% { transform: translateY(-80px) scale(0.8); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes notifOut {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-60px) scale(0.8); opacity: 0; }
+        }
+        .notification.hide {
+            animation: notifOut 0.4s ease-in forwards;
+        }
+
+        .notification-success { border-color: #2ecc71; background: rgba(46, 204, 113, 0.15); }
+        .notification-error { border-color: #e74c3c; background: rgba(231, 76, 60, 0.15); }
+        .notification-warning { border-color: #f39c12; background: rgba(243, 156, 18, 0.15); }
+        .notification-info { border-color: #3498db; background: rgba(52, 152, 219, 0.15); }
+        .notification-cashout { border-color: #FFD700; background: rgba(255, 215, 0, 0.15); }
+        .notification-complete { border-color: #FF6B35; background: rgba(255, 107, 53, 0.15); }
+
+        .notification-icon { font-size: 22px; }
+        .notification-text { font-size: 14px; }
+
+        /* ===== مودال الإحصائيات ===== */
+        .stats-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.92);
+            backdrop-filter: blur(20px);
+            z-index: 2000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        .stats-modal.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .stats-modal-content {
+            background: linear-gradient(145deg, rgba(30, 30, 60, 0.98), rgba(20, 20, 50, 0.98));
+            border-radius: 30px;
+            border: 2px solid rgba(255, 215, 0, 0.2);
+            max-width: 500px;
+            width: 92%;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 20px;
+            animation: modalPop 0.3s ease;
+        }
+        .stats-modal-content::-webkit-scrollbar {
+            width: 4px;
+        }
+        .stats-modal-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .stats-modal-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 215, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        .stats-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(255, 215, 0, 0.1);
+            margin-bottom: 18px;
+        }
+        .stats-modal-header h3 {
+            font-size: 22px;
+            color: #FFD700;
+            margin: 0;
+        }
+        .close-stats-modal {
+            font-size: 30px;
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.3);
+            transition: all 0.2s;
+        }
+        .close-stats-modal:hover { color: #e74c3c; transform: scale(1.1); }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .stats-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            padding: 14px 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 215, 0, 0.05);
+        }
+        .stats-card-icon { font-size: 24px; margin-bottom: 4px; }
+        .stats-card-value {
+            font-size: 22px;
+            font-weight: 800;
+            color: #FFD700;
+        }
+        .stats-card-label {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 2px;
+        }
+
+        .stats-section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: rgba(255, 215, 0, 0.6);
+            margin: 16px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.05);
+        }
+
+        .platform-profit {
+            font-size: 26px;
+            font-weight: 900;
+        }
+        .platform-profit.positive { color: #2ecc71; }
+        .platform-profit.negative { color: #e74c3c; }
+
+        .refresh-stats-btn {
+            background: rgba(52, 152, 219, 0.2);
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            color: #3498db;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 15px;
+            width: 100%;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .refresh-stats-btn:hover {
+            background: #3498db;
+            color: #fff;
+        }
+
+        /* ===== مقتطف التشويق (Teaser) ===== */
+        .teaser-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.88);
+            backdrop-filter: blur(20px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 15;
+            flex-direction: column;
+            padding: 30px;
+            animation: fadeIn 0.6s ease;
+        }
+        .teaser-overlay.show {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .teaser-content {
+            text-align: center;
+            max-width: 420px;
+            width: 100%;
+        }
+
+        .teaser-tower-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: towerFloat 3s ease-in-out infinite;
+        }
+        @keyframes towerFloat {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-12px) scale(1.05); }
+        }
+
+        .teaser-title {
+            font-size: 28px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FFD700, #FF6B35);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .teaser-subtitle {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .teaser-features {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        .teaser-feature {
+            background: rgba(255, 215, 0, 0.03);
+            border: 1px solid rgba(255, 215, 0, 0.06);
+            border-radius: 14px;
+            padding: 12px 8px;
+            text-align: center;
+        }
+        .teaser-feature .icon { font-size: 24px; display: block; margin-bottom: 4px; }
+        .teaser-feature .label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 600;
+        }
+
+        .teaser-deposit-box {
+            background: rgba(255, 215, 0, 0.05);
+            border: 2px solid rgba(255, 215, 0, 0.1);
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .teaser-deposit-box .info {
+            text-align: right;
+        }
+        .teaser-deposit-box .info .label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+        .teaser-deposit-box .info .amount {
+            font-size: 20px;
+            font-weight: 800;
+            color: #FFD700;
+        }
+        .teaser-deposit-box .status-badge {
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .status-badge.not-met {
+            background: rgba(231, 76, 60, 0.15);
+            color: #e74c3c;
+            border: 1px solid rgba(231, 76, 60, 0.2);
+        }
+        .status-badge.met {
+            background: rgba(46, 204, 113, 0.15);
+            color: #2ecc71;
+            border: 1px solid rgba(46, 204, 113, 0.2);
+        }
+        .status-badge.waiting {
+            background: rgba(243, 156, 18, 0.15);
+            color: #f39c12;
+            border: 1px solid rgba(243, 156, 18, 0.2);
+        }
+
+        .teaser-progress {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .teaser-progress .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #FFD700, #FF6B35);
+            border-radius: 10px;
+            width: 0%;
+            transition: width 0.8s ease;
+        }
+        .teaser-progress .fill.animated {
+            animation: progressPulse 2s ease-in-out infinite;
+        }
+        @keyframes progressPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .teaser-btn {
+            background: linear-gradient(135deg, #FFD700, #FF6B35);
+            color: #000;
+            border: none;
+            padding: 14px 30px;
+            border-radius: 60px;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            font-family: inherit;
+        }
+        .teaser-btn:active { transform: scale(0.97); }
+        .teaser-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .teaser-btn-secondary {
+            background: transparent;
+            border: 2px solid rgba(255, 215, 0, 0.15);
+            color: rgba(255, 255, 255, 0.5);
+            padding: 12px 30px;
+            border-radius: 60px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            margin-top: 8px;
+            font-family: inherit;
+        }
+        .teaser-btn-secondary:active { transform: scale(0.97); }
+
+        /* ===== مستخدم غير مسجل ===== */
+        .error-container {
+            display: none;
+            text-align: center;
+            padding: 30px 20px;
+            background: rgba(18, 18, 18, 0.9);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            max-width: 420px;
+            margin: auto;
+            z-index: 5;
+        }
+        .error-container.show {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+        .error-container .error-icon { font-size: 48px; margin-bottom: 12px; }
+        .error-container .error-title {
+            color: #FFD700;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .error-container .error-text {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            line-height: 1.8;
+        }
+        .error-container .error-text .highlight {
+            color: #FFD700;
+            font-weight: 700;
+        }
+        .error-container .btn-open-bot {
+            margin-top: 16px;
+            padding: 14px 36px;
+            background: linear-gradient(135deg, #FFD700, #FF6B35);
+            border: none;
+            border-radius: 14px;
+            color: #000;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .error-container .btn-open-bot:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 40px rgba(255, 215, 0, 0.15);
+        }
+
+        /* ===== متفرقات ===== */
+        .hidden { display: none !important; }
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(255, 215, 0, 0.1);
+            border-top: 3px solid #FFD700;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 16px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* ===== استجابة ===== */
+        @media (max-width: 480px) {
+            .game-bottom-bar { padding: 8px 10px; gap: 8px; }
+            .multiplier-box { min-width: 60px; padding: 4px 10px; }
+            .multiplier-value { font-size: 16px; }
+            .game-button { padding: 8px 16px; font-size: 14px; }
+            .drop-button { padding: 8px 18px; }
+            .cashout-button { padding: 8px 18px; }
+            .bet-selection-chip { padding: 10px 6px; font-size: 15px; }
+            .bet-selection-title { font-size: 18px; }
+            .start-game-btn { padding: 14px 20px; font-size: 16px; }
+            .notification { padding: 10px 16px; font-size: 14px; }
+            .notification-text { font-size: 13px; }
+            .header-logo { font-size: 14px; }
+            .header-balance-value { font-size: 13px; }
+            .teaser-title { font-size: 22px; }
+            .teaser-tower-icon { font-size: 60px; }
+            .teaser-deposit-box { padding: 12px 16px; }
+            .teaser-deposit-box .info .amount { font-size: 17px; }
+            .stats-card-value { font-size: 18px; }
+            .platform-profit { font-size: 22px; }
+            .game-status { font-size: 10px; padding: 4px 10px; min-height: 24px; }
+        }
+
+        @media (max-width: 380px) {
+            .game-button { font-size: 12px; padding: 6px 12px; }
+            .multiplier-value { font-size: 14px; }
+            .bet-selection-chip { font-size: 13px; padding: 8px 4px; }
+            .teaser-features { grid-template-columns: 1fr 1fr; gap: 6px; }
+            .teaser-feature { padding: 8px 4px; }
+            .teaser-feature .icon { font-size: 18px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ================================================================
+     شاشة التحميل
+     ================================================================ -->
+<div id="loadingScreen" class="loading-screen">
+    <div class="loading-container">
+        <div class="spinix-logo-loading">SPINIX</div>
+        <div class="loading-subtitle">✦ GOLDEN TOWER ✦</div>
+        <div class="loading-spinner-gold"></div>
+        <div class="progress-container">
+            <div class="progress-bar-outer">
+                <div id="progressBar" class="progress-bar-inner"></div>
+            </div>
+            <div class="progress-percentage" id="progressPercent">0%</div>
+        </div>
+        <div id="loadingStatus" class="loading-status">جاري التحقق من الاتصال...</div>
+    </div>
+</div>
+
+<!-- ================================================================
+     حاوية اللعبة الرئيسية
+     ================================================================ -->
+<div id="gameWrapper" class="game-wrapper">
+
+    <!-- ===== الهيدر ===== -->
+    <div class="game-header">
+        <div class="header-logo">🏗️ SPINIX | GOLDEN TOWER</div>
+        <div class="header-right">
+            <button id="adminStatsBtn" class="admin-stats-btn hidden">📊 إحصائيات</button>
+            <div class="header-balance">
+                <span class="header-balance-value" id="headerBalance">0</span>
+                <span>💰</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== منطقة الرسم ===== -->
+    <div class="game-canvas-area" id="gameCanvasArea">
+
+        <!-- نجوم الخلفية -->
+        <div class="stars-container" id="starsContainer"></div>
+
+        <!-- اللوحة -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- مؤشر السرعة -->
+        <div class="speed-indicator" id="speedIndicator">⚡ 0.000</div>
+
+        <!-- ===== مقتطف التشويق (عند عدم اكتمال الإيداع) ===== -->
+        <div class="teaser-overlay" id="teaserOverlay">
+            <div class="teaser-content">
+                <div class="teaser-tower-icon">🏗️</div>
+                <div class="teaser-title">SPINIX · GOLDEN TOWER</div>
+                <div class="teaser-subtitle">
+                    ابنِ برجك الذهبي واربح مضاعفات تصل إلى <strong style="color:#FFD700;">15x</strong> 🏆
+                </div>
+
+                <div class="teaser-features">
+                    <div class="teaser-feature">
+                        <span class="icon">🎯</span>
+                        <span class="label">رهان ثابت</span>
+                    </div>
+                    <div class="teaser-feature">
+                        <span class="icon">🏗️</span>
+                        <span class="label">13 طابقاً</span>
+                    </div>
+                    <div class="teaser-feature">
+                        <span class="icon">💰</span>
+                        <span class="label">جمع فوري</span>
+                    </div>
+                    <div class="teaser-feature">
+                        <span class="icon">🔥</span>
+                        <span class="label">مضاعفات متزايدة</span>
+                    </div>
+                </div>
+
+                <div class="teaser-deposit-box">
+                    <div class="info">
+                        <div class="label">📌 المطلوب للإيداع</div>
+                        <div class="amount" id="teaserDepositAmount">2,000 SYP</div>
+                    </div>
+                    <div>
+                        <span class="status-badge not-met" id="teaserStatusBadge">
+                            ⏳ غير مكتمل
+                        </span>
+                    </div>
+                </div>
+
+                <div class="teaser-progress">
+                    <div class="fill" id="teaserProgressFill"></div>
+                </div>
+
+                <button class="teaser-btn" id="teaserCheckDepositBtn" disabled>
+                    🔄 جاري التحقق...
+                </button>
+                <button class="teaser-btn-secondary" id="teaserRefreshBtn">
+                    🔄 تحديث الحالة
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== طبقة اختيار الرهان ===== -->
+        <div id="betSelectionOverlay" class="bet-selection-overlay">
+            <div class="bet-selection-container">
+                <div class="bet-selection-title">✨ اختر رهانك ✨</div>
+                <div class="bet-selection-sub">كل رهان يحدد حجم المكسب المحتمل</div>
+                <div class="bet-selection-grid" id="betSelectionGrid"></div>
+                <button class="start-game-btn" id="startGameBtn">🎲 بدء اللعبة 🎲</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ===== الشريط السفلي ===== -->
+    <div class="game-bottom-bar">
+        <div class="multiplier-box">
+            <div class="multiplier-label">🎯 مضاعف</div>
+            <div class="multiplier-value" id="multiplierValue">0.00x</div>
+        </div>
+        <button class="game-button drop-button" id="dropButton" disabled>⬇️ إفلات</button>
+        <button class="game-button cashout-button" id="cashoutButton" disabled>
+            💰 جمع
+            <span class="cashout-amount" id="cashoutAmount" style="display:none;">0</span>
+        </button>
+    </div>
+
+    <!-- ===== حالة اللعبة ===== -->
+    <div class="game-status" id="gameStatus">
+        <span class="status-dot ready" id="statusDot"></span>
+        <span id="statusText">✨ اختر رهانك ثم اضغط "بدء اللعبة"</span>
+    </div>
+</div>
+
+<!-- ================================================================
+     الإشعارات
+     ================================================================ -->
+<div id="notificationContainer" class="notification-container"></div>
+
+<!-- ================================================================
+     مودال الإحصائيات
+     ================================================================ -->
+<div id="statsModal" class="stats-modal">
+    <div class="stats-modal-content">
+        <div class="stats-modal-header">
+            <h3>📊 إحصائيات SPINIX</h3>
+            <span class="close-stats-modal" id="closeStatsModal">&times;</span>
+        </div>
+        <div id="statsContent">
+            <div style="text-align:center;padding:20px;">
+                <div class="spinner"></div>
+                <p style="color:rgba(255,255,255,0.3);font-size:13px;">جاري تحميل الإحصائيات...</p>
+            </div>
+        </div>
+        <button class="refresh-stats-btn" id="refreshStatsBtn">🔄 تحديث الإحصائيات</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     خطأ المستخدم
+     ================================================================ -->
+<div class="error-container" id="errorContainer">
+    <div class="error-icon">⚠️</div>
+    <div class="error-title">يجب الدخول من البوت</div>
+    <div class="error-text">
+        لا يمكن الوصول إلى معرف المستخدم.<br>
+        يرجى فتح اللعبة من خلال <span class="highlight">بوت IChancy</span>.
+    </div>
+    <button class="btn-open-bot" onclick="window.open('https://t.me/IChancyBot', '_blank')">🚀 فتح البوت</button>
+</div>
+
+<!-- ================================================================
+     جافا سكريبت
+     ================================================================ -->
+<script>
+    // ================================================================
+    //                      الإعدادات الأساسية
+    // ================================================================
+    const API_BASE = 'https://joj-d0kl.onrender.com'; // استبدل بالرابط الصحيح
+    const ADMIN_ID = 7011476249;
+
+    let USER_ID = null;
+    let isAdmin = false;
+    let userBalance = 0;
+    let gameActive = false;
+    let currentBet = 1000;
+    let currentFloor = 0;
+    let pendingProfit = 0;
+    let currentMultiplier = 0;
+    let isProcessingRequest = false;
+
+    // ================================================================
+    //                      الحصول على USER_ID
+    // ================================================================
+    function getUserId() {
+        const params = new URLSearchParams(window.location.search);
+        let id = params.get('user_id') || params.get('userId') || params.get('id');
+        if (id && !isNaN(id)) {
+            USER_ID = parseInt(id);
+            localStorage.setItem('spinix_user_id', USER_ID);
+            return USER_ID;
+        }
+        try {
+            if (window.Telegram && window.Telegram.WebApp) {
+                const user = window.Telegram.WebApp.initDataUnsafe?.user;
+                if (user && user.id) {
+                    USER_ID = user.id;
+                    localStorage.setItem('spinix_user_id', USER_ID);
+                    return USER_ID;
+                }
+            }
+        } catch (e) {}
+        id = localStorage.getItem('spinix_user_id');
+        if (id) {
+            USER_ID = parseInt(id);
+            return USER_ID;
+        }
+        return null;
+    }
+
+    // ================================================================
+    //                      دوال API
+    // ================================================================
+    async function apiCall(endpoint, options = {}) {
+        try {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+            return response;
+        } catch (error) {
+            console.error('API call failed:', error);
+            return null;
+        }
+    }
+
+    // ================================================================
+    //                      نظام الإشعارات
+    // ================================================================
+    function showNotification(message, type = 'info', duration = 3500) {
+        const container = document.getElementById('notificationContainer');
+        const notification = document.createElement('div');
+
+        const icons = {
+            success: '🎉',
+            error: '💔',
+            warning: '⚠️',
+            info: 'ℹ️',
+            cashout: '💰',
+            complete: '🏆'
+        };
+        const classes = {
+            success: 'notification-success',
+            error: 'notification-error',
+            warning: 'notification-warning',
+            info: 'notification-info',
+            cashout: 'notification-cashout',
+            complete: 'notification-complete'
+        };
+
+        const icon = icons[type] || 'ℹ️';
+        const cls = classes[type] || 'notification-info';
+
+        notification.className = `notification ${cls}`;
+        notification.innerHTML = `
+                    <span class="notification-icon">${icon}</span>
+                    <span class="notification-text">${message}</span>
+                `;
+
+        container.appendChild(notification);
+
+        setTimeout(() => {
+            notification.classList.add('hide');
+            setTimeout(() => {
+                if (notification.parentNode) notification.remove();
+            }, 400);
+        }, duration);
+    }
+
+    // ================================================================
+    //                      نظام النجوم
+    // ================================================================
+    function createStars() {
+        const container = document.getElementById('starsContainer');
+        const count = 80;
+        for (let i = 0; i < count; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            const size = 1 + Math.random() * 2;
+            star.style.width = size + 'px';
+            star.style.height = size + 'px';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.setProperty('--duration', (3 + Math.random() * 4) + 's');
+            star.style.animationDelay = (Math.random() * 5) + 's';
+            container.appendChild(star);
+        }
+    }
+
+    // ================================================================
+    //                      شاشة التحميل
+    // ================================================================
+    function updateProgress(percent, status) {
+        const bar = document.getElementById('progressBar');
+        const text = document.getElementById('progressPercent');
+        const statusEl = document.getElementById('loadingStatus');
+        bar.style.width = percent + '%';
+        text.textContent = percent + '%';
+        if (status) statusEl.textContent = status;
+    }
+
+    function showLoading(show) {
+        const screen = document.getElementById('loadingScreen');
+        if (show) {
+            screen.classList.remove('hidden');
+        } else {
+            screen.classList.add('hidden');
+        }
+    }
+
+    // ================================================================
+    //                      تحديث حالة الإيداع (Teaser)
+    // ================================================================
+    async function checkDepositStatus() {
+        if (!USER_ID) return;
+
+        try {
+            const res = await apiCall(`/api/spinix/status?user_id=${USER_ID}`);
+            if (!res?.ok) {
+                showNotification('فشل التحقق من حالة الإيداع', 'error');
+                return;
+            }
+
+            const data = await res.json();
+            if (!data.success) {
+                showNotification(data.error || 'خطأ في التحقق', 'error');
+                return;
+            }
+
+            const deposit = data.deposit_requirement || {};
+            const canPlay = data.can_play;
+
+            // تحديث المقتطف التشويقي
+            const teaser = document.getElementById('teaserOverlay');
+            const depositAmount = document.getElementById('teaserDepositAmount');
+            const statusBadge = document.getElementById('teaserStatusBadge');
+            const progressFill = document.getElementById('teaserProgressFill');
+            const checkBtn = document.getElementById('teaserCheckDepositBtn');
+
+            if (deposit.required) {
+                const minAmount = deposit.min_amount || 2000;
+                const current = deposit.current_deposits || 0;
+                const isMet = deposit.is_met || false;
+                const roundConsumed = deposit.round_consumed || false;
+
+                depositAmount.textContent = minAmount.toLocaleString() + ' SYP';
+
+                if (roundConsumed) {
+                    statusBadge.className = 'status-badge waiting';
+                    statusBadge.textContent = '⏳ تم استهلاك الجولة';
+                    progressFill.style.width = '100%';
+                    progressFill.classList.add('animated');
+                    checkBtn.textContent = '🔄 إيداع جديد للعب';
+                    checkBtn.disabled = false;
+                    checkBtn.onclick = () => {
+                        window.open('https://t.me/IChancyBot', '_blank');
+                    };
+                } else if (isMet) {
+                    statusBadge.className = 'status-badge met';
+                    statusBadge.textContent = '✅ مكتمل';
+                    progressFill.style.width = '100%';
+                    progressFill.classList.remove('animated');
+                    checkBtn.textContent = '🎮 العب الآن!';
+                    checkBtn.disabled = false;
+                    checkBtn.onclick = () => {
+                        teaser.classList.remove('show');
+                        showBetSelection();
+                    };
+                } else {
+                    const percent = Math.min((current / minAmount) * 100, 99);
+                    statusBadge.className = 'status-badge not-met';
+                    statusBadge.textContent = `⏳ ${current.toLocaleString()} / ${minAmount.toLocaleString()}`;
+                    progressFill.style.width = percent + '%';
+                    progressFill.classList.add('animated');
+                    checkBtn.textContent = '💰 إيداع مطلوب';
+                    checkBtn.disabled = false;
+                    checkBtn.onclick = () => {
+                        window.open('https://t.me/IChancyBot', '_blank');
+                    };
+                }
+            } else {
+                // الإيداع غير مطلوب
+                if (canPlay) {
+                    teaser.classList.remove('show');
+                    showBetSelection();
+                    return;
+                } else {
+                    statusBadge.className = 'status-badge waiting';
+                    statusBadge.textContent = '⏳ انتظر...';
+                    progressFill.style.width = '50%';
+                    progressFill.classList.add('animated');
+                    checkBtn.textContent = '⏳ جاري التحميل...';
+                    checkBtn.disabled = true;
+                }
+            }
+
+            // إظهار المقتطف إذا لم يكن يمكن اللعب
+            if (!canPlay || deposit.round_consumed) {
+                teaser.classList.add('show');
+                hideBetSelection();
+            } else {
+                teaser.classList.remove('show');
+                showBetSelection();
+            }
+
+        } catch (error) {
+            console.error('Deposit check error:', error);
+            showNotification('خطأ في التحقق من الإيداع', 'error');
+        }
+    }
+
+    // ================================================================
+    //                      تحميل إعدادات اللعبة
+    // ================================================================
+    async function loadGameSettings() {
+        try {
+            const res = await apiCall(`/api/spinix/admin/settings?admin_id=${ADMIN_ID}`);
+            if (res?.ok) {
+                const data = await res.json();
+                if (data.success) {
+                    // تحديث الرهان إذا كان مختلفاً
+                    if (data.settings.bet_amount) {
+                        currentBet = parseFloat(data.settings.bet_amount) || 1000;
+                    }
+                    return data.settings;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+        }
+        return {};
+    }
+
+    // ================================================================
+    //                      دوال العرض
+    // ================================================================
+    function showBetSelection() {
+        document.getElementById('betSelectionOverlay').classList.remove('hidden');
+    }
+
+    function hideBetSelection() {
+        document.getElementById('betSelectionOverlay').classList.add('hidden');
+    }
+
+    function updateUI() {
+        document.getElementById('headerBalance').textContent = Math.floor(userBalance);
+        const multiplier = currentMultiplier || 0;
+        document.getElementById('multiplierValue').textContent = multiplier.toFixed(2) + 'x';
+
+        const cashoutAmountSpan = document.getElementById('cashoutAmount');
+        const cashoutBtn = document.getElementById('cashoutButton');
+        if (pendingProfit > 0 && gameActive) {
+            cashoutAmountSpan.textContent = Math.floor(pendingProfit);
+            cashoutAmountSpan.style.display = 'block';
+            cashoutBtn.disabled = false;
+        } else {
+            cashoutAmountSpan.style.display = 'none';
+            cashoutBtn.disabled = true;
+        }
+
+        // تحديث حالة اللعبة
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        if (gameActive) {
+            dot.className = 'status-dot playing';
+            text.textContent = `🎯 الطابق ${currentFloor + 1} · مضاعف ${(currentMultiplier || 0).toFixed(2)}x`;
+        } else {
+            dot.className = 'status-dot ready';
+            text.textContent = '✨ اختر رهانك ثم اضغط "بدء اللعبة"';
+        }
+    }
+
+    function updateGameStatus(message, type = 'info') {
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        text.textContent = message;
+        const classes = {
+            info: 'ready',
+            playing: 'playing',
+            waiting: 'waiting',
+            error: 'error'
+        };
+        dot.className = 'status-dot ' + (classes[type] || 'ready');
+    }
+
+    // ================================================================
+    //                      تحميل حالة اللعبة
+    // ================================================================
+    async function loadGameState() {
+        if (!USER_ID) return;
+
+        try {
+            const res = await apiCall(`/api/spinix/status?user_id=${USER_ID}`);
+            if (!res?.ok) {
+                showNotification('فشل تحميل حالة اللعبة', 'error');
+                return;
+            }
+
+            const data = await res.json();
+            if (!data.success) {
+                showNotification(data.error || 'خطأ في تحميل الحالة', 'error');
+                return;
+            }
+
+            // التحقق من الإيداع أولاً
+            await checkDepositStatus();
+
+            // إذا كانت هناك جولة نشطة
+            if (data.active_game) {
+                const game = data.active_game;
+                gameActive = true;
+                currentFloor = game.current_floor || 0;
+                pendingProfit = game.pending_profit || 0;
+                currentMultiplier = game.current_multiplier || 0;
+
+                updateUI();
+                updateGameStatus(`🔄 استئناف الجولة - الطابق ${currentFloor + 1}`, 'playing');
+
+                // إظهار أزرار اللعب
+                document.getElementById('dropButton').disabled = false;
+                document.getElementById('cashoutButton').disabled = pendingProfit <= 0;
+
+                hideBetSelection();
+                // إخفاء المقتطف إذا ظهر
+                document.getElementById('teaserOverlay').classList.remove('show');
+            } else {
+                // لا توجد جولة نشطة
+                gameActive = false;
+                currentFloor = 0;
+                pendingProfit = 0;
+                currentMultiplier = 0;
+
+                document.getElementById('dropButton').disabled = true;
+                document.getElementById('cashoutButton').disabled = true;
+
+                updateUI();
+                updateGameStatus('✨ جاهز للعب', 'info');
+
+                // إذا كان يمكن اللعب، أظهر اختيار الرهان
+                if (data.can_play) {
+                    showBetSelection();
+                }
+            }
+
+        } catch (error) {
+            console.error('Load game state error:', error);
+            showNotification('خطأ في تحميل حالة اللعبة', 'error');
+        }
+    }
+
+    // ================================================================
+    //                      بدء اللعبة
+    // ================================================================
+    async function startGame() {
+        if (isProcessingRequest) {
+            showNotification('جاري معالجة طلب سابق...', 'warning');
+            return;
+        }
+
+        if (!USER_ID) {
+            showNotification('معرف المستخدم غير موجود', 'error');
+            return;
+        }
+
+        isProcessingRequest = true;
+        const btn = document.getElementById('startGameBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري البدء...';
+
+        try {
+            const res = await apiCall('/api/spinix/start', {
+                method: 'POST',
+                body: JSON.stringify({ user_id: USER_ID })
+            });
+
+            if (!res?.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                showNotification(errorData.error || 'فشل بدء اللعبة', 'error');
+                isProcessingRequest = false;
+                btn.disabled = false;
+                btn.textContent = '🎲 بدء اللعبة 🎲';
+                return;
+            }
+
+            const data = await res.json();
+            isProcessingRequest = false;
+
+            if (data.success) {
+                gameActive = true;
+                currentFloor = 0;
+                pendingProfit = 0;
+                currentMultiplier = 0;
+
+                hideBetSelection();
+                document.getElementById('dropButton').disabled = false;
+                document.getElementById('cashoutButton').disabled = true;
+                document.getElementById('teaserOverlay').classList.remove('show');
+
+                updateUI();
+                updateGameStatus(`🎯 الطابق 1 · مضاعف 0.00x`, 'playing');
+                showNotification(`🎮 جولة جديدة! رهان ${data.bet_amount} SYP`, 'success');
+
+                // بدء الرسوم المتحركة
+                initCanvas();
+                resetGameState();
+            } else {
+                showNotification(data.error || 'فشل بدء الجولة', 'error');
+                if (data.deposit_required) {
+                    await checkDepositStatus();
+                }
+            }
+
+        } catch (error) {
+            console.error('Start game error:', error);
+            showNotification('خطأ في الاتصال', 'error');
+            isProcessingRequest = false;
+        }
+
+        btn.disabled = false;
+        btn.textContent = '🎲 بدء اللعبة 🎲';
+    }
+
+    // ================================================================
+    //                      دوال الرسم (Canvas)
+    // ================================================================
+    let canvas, ctx;
+    let cameraY = 0;
+    let targetCameraY = 0;
+    let builtFloors = [];
+    let ground = { x: 0, y: 0, w: 210, h: 26 };
+    let initialPivotY = -30;
+    let pivotOffsetY = 0;
+    let isFalling = false;
+    let fallVelY = 0;
+    let fallPosX = 0, fallPosY = 0;
+    let fallW = 50, fallH = 50;
+    let fallFloorNum = 0;
+    let waitingForLanding = false;
+    let pendingResult = null;
+
+    const MAX_FLOOR = 13;
+    const FLOOR_HEIGHT_INCREMENT = 23;
+    const FALL_GRAVITY = 0.65;
+    const SPEEDS_BY_FLOOR = {
+        0: 0.048, 1: 0.052, 2: 0.066, 3: 0.070, 4: 0.084,
+        5: 0.098, 6: 0.102, 7: 0.116, 8: 0.120, 9: 0.124,
+        10: 0.138, 11: 0.152, 12: 0.166, 13: 0.170
+    };
+    const MAX_SPEED = 0.170;
+
+    let swinging = {
+        x: 0, y: 0, w: 50, h: 50,
+        angle: 0, speed: 0.048, direction: 1, maxAngle: 0.85,
+        pivotX: 0, pivotY: -30, ropeLength: 210
+    };
+
+    let floorImage = new Image();
+    let imageLoaded = false;
+    floorImage.onload = () => { imageLoaded = true; };
+    floorImage.onerror = () => { imageLoaded = true; };
+    floorImage.src = 'https://i.imgur.com/3zW7n8A.png';
+
+    function initCanvas() {
+        canvas = document.getElementById('gameCanvas');
+        ctx = canvas.getContext('2d');
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+    }
+
+    function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        addGround();
+        updatePivotPosition();
+        draw();
+    }
+
+    function addGround() {
+        if (!canvas) return;
+        let groundY = canvas.height - 48;
+        let groundX = canvas.width / 2 - 105;
+        ground = { x: groundX, y: groundY, w: 210, h: 26 };
+        builtFloors = [{
+            x: groundX + ground.w / 2,
+            y: groundY + ground.h / 2,
+            w: ground.w,
+            h: ground.h,
+            floorNumber: 0,
+            isGround: true
+        }];
+    }
+
+    function updatePivotPosition() {
+        if (!canvas) return;
+        swinging.pivotX = canvas.width / 2;
+        swinging.pivotY = initialPivotY - pivotOffsetY;
+        swinging.angle = 0;
+        swinging.direction = 1;
+        updateSwingPosition();
+    }
+
+    function resetGameState() {
+        builtFloors = [];
+        currentFloor = 0;
+        isFalling = false;
+        waitingForLanding = false;
+        targetCameraY = cameraY = 0;
+        pivotOffsetY = 0;
+        addGround();
+        updatePivotPosition();
+        draw();
+    }
+
+    function updateSwingPosition() {
+        let offsetX = Math.sin(swinging.angle) * swinging.ropeLength;
+        let centerX = swinging.pivotX + offsetX;
+        let verticalOffset = (1 - Math.cos(swinging.angle * 0.65)) * 22;
+        let centerY = swinging.pivotY + swinging.ropeLength * 0.75 + verticalOffset;
+        swinging.x = centerX;
+        swinging.y = centerY;
+    }
+
+    function updateSwing() {
+        if (gameActive && !waitingForLanding && !isFalling && currentFloor < MAX_FLOOR) {
+            const speed = SPEEDS_BY_FLOOR[currentFloor] || MAX_SPEED;
+            swinging.speed = speed;
+            swinging.angle += swinging.direction * speed;
+            if (swinging.angle > swinging.maxAngle) {
+                swinging.angle = swinging.maxAngle;
+                swinging.direction = -1;
+            } else if (swinging.angle < -swinging.maxAngle) {
+                swinging.angle = -swinging.maxAngle;
+                swinging.direction = 1;
+            }
+            updateSwingPosition();
+        }
+    }
+
+    function updateCameraSmooth() {
+        const diff = targetCameraY - cameraY;
+        cameraY += diff * 0.15;
+        if (Math.abs(diff) < 0.5) cameraY = targetCameraY;
+    }
+
+    function getCanvasCoords(x, y) {
+        const rect = canvas.getBoundingClientRect();
+        const areaRect = document.getElementById('gameCanvasArea').getBoundingClientRect();
+        return {
+            x: areaRect.left + (x / canvas.width) * areaRect.width,
+            y: areaRect.top + (y / canvas.height) * areaRect.height
+        };
+    }
+
+    function drawFloor(x, y, w, h, floorNum, isGround = false) {
+        if (isGround) {
+            ctx.fillStyle = "#3a2a1a";
+            ctx.shadowBlur = 4;
+            ctx.fillRect(x - w / 2, y - h / 2, w, h);
+            ctx.fillStyle = "#FFD700";
+            ctx.fillRect(x - w / 2 + 4, y - h / 2, w - 8, 5);
+            return;
+        }
+
+        if (floorImage.complete && floorImage.naturalWidth > 0) {
+            try {
+                ctx.drawImage(floorImage, x - w / 2, y - h / 2, w, h);
+            } catch (e) {
+                const colors = ["#8B6914", "#B8860B", "#DAA520", "#FFD700"];
+                ctx.fillStyle = colors[floorNum % 4];
+                ctx.fillRect(x - w / 2, y - h / 2, w, h);
+            }
+        } else {
+            const colors = ["#8B6914", "#B8860B", "#DAA520", "#FFD700"];
+            ctx.fillStyle = colors[floorNum % 4];
+            ctx.fillRect(x - w / 2, y - h / 2, w, h);
+        }
+
+        ctx.fillStyle = "#FFD700";
+        ctx.fillRect(x - w / 2 + 4, y - h / 2, w - 8, 4);
+
+        ctx.font = "bold 14px 'Segoe UI'";
+        ctx.fillStyle = "#FFF8DC";
+        ctx.shadowBlur = 2;
+        ctx.fillText(`🏗️${floorNum}`, x - 16, y + 6);
+        ctx.shadowBlur = 0;
+    }
+
+    function draw() {
+        if (!ctx || !canvas) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // خلفية متدرجة
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "#0a0e27");
+        grad.addColorStop(0.3, "#1a1a3e");
+        grad.addColorStop(0.6, "#0f1a2e");
+        grad.addColorStop(1, "#0a0e27");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.translate(0, -cameraY);
+
+        for (let f of builtFloors) {
+            drawFloor(f.x, f.y, f.w, f.h, f.floorNumber, f.isGround);
+        }
+
+        if (gameActive && !waitingForLanding && !isFalling && currentFloor < MAX_FLOOR) {
+            // الحبل
+            ctx.beginPath();
+            ctx.moveTo(swinging.pivotX, swinging.pivotY);
+            ctx.lineTo(swinging.x, swinging.y - swinging.h / 2 + 5);
+            ctx.strokeStyle = "rgba(255,215,0,0.4)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // الطابق المتأرجح
+            drawFloor(swinging.x, swinging.y, swinging.w, swinging.h, currentFloor + 1, false);
+
+            // نقطة التعليق
+            ctx.beginPath();
+            ctx.arc(swinging.pivotX, swinging.pivotY, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#FFD700";
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = "rgba(255,215,0,0.3)";
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        } else if (isFalling) {
+            drawFloor(fallPosX, fallPosY, fallW, fallH, fallFloorNum, false);
+        }
+
+        ctx.restore();
+    }
+
+    function gameLoop() {
+        updateSwing();
+        updateCameraSmooth();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // ================================================================
+    //                      إفلات الطابق (Drop)
+    // ================================================================
+    async function attemptDrop() {
+        if (isProcessingRequest || !gameActive) return;
+        if (waitingForLanding || isFalling) return;
+        if (currentFloor >= MAX_FLOOR) {
+            showNotification('🏆 البرج مكتمل! قم بجمع الأرباح.', 'warning');
+            return;
+        }
+
+        let lastFloor = builtFloors[builtFloors.length - 1];
+        let lastLeft = lastFloor.x - lastFloor.w / 2;
+        let lastRight = lastFloor.x + lastFloor.w / 2;
+        let fallLeft = swinging.x - swinging.w / 2;
+        let fallRight = swinging.x + swinging.w / 2;
+        let overlapLeft = Math.max(fallLeft, lastLeft);
+        let overlapRight = Math.min(fallRight, lastRight);
+        let overlapWidth = Math.max(0, overlapRight - overlapLeft);
+        let requiredOverlap = swinging.w * 0.5;
+
+        isFalling = true;
+        waitingForLanding = true;
+        fallPosX = swinging.x;
+        fallPosY = swinging.y;
+        fallW = swinging.w;
+        fallH = swinging.h;
+        fallFloorNum = currentFloor + 1;
+        fallVelY = 2;
+
+        startFallAnimation(overlapWidth, requiredOverlap);
+        await processServerDrop(overlapWidth, requiredOverlap, fallPosX);
+    }
+
+    function startFallAnimation(expectedOverlap, requiredOverlap) {
+        const fallInterval = setInterval(() => {
+            if (!isFalling) {
+                clearInterval(fallInterval);
+                return;
+            }
+
+            fallVelY += FALL_GRAVITY;
+            fallPosY += fallVelY;
+
+            let lastFloor = builtFloors[builtFloors.length - 1];
+            let lastTop = lastFloor.y - lastFloor.h / 2;
+
+            if (fallPosY + fallH / 2 >= lastTop && fallVelY >= 0) {
+                clearInterval(fallInterval);
+
+                let finalY = lastTop - fallH / 2;
+                fallPosY = finalY;
+
+                const impactX = fallPosX;
+                const impactY = lastTop;
+                const coords = getCanvasCoords(impactX, impactY);
+
+                // اهتزاز
+                document.getElementById('gameCanvasArea').classList.add('shake');
+                setTimeout(() => {
+                    document.getElementById('gameCanvasArea').classList.remove('shake');
+                }, 350);
+
+                // تأثير الغبار
+                const dust = document.createElement('div');
+                dust.className = 'dust-effect';
+                dust.style.left = (coords.x - 30) + 'px';
+                dust.style.top = (coords.y - 30) + 'px';
+                document.getElementById('gameCanvasArea').appendChild(dust);
+                setTimeout(() => dust.remove(), 700);
+
+                // عرض المضاعف
+                const multipliers = {
+                    1: 0.5, 2: 0.7, 3: 0.9, 4: 1.1, 5: 1.3,
+                    6: 1.5, 7: 1.7, 8: 3.0, 9: 5.0, 10: 7.0,
+                    11: 9.0, 12: 11.0, 13: 15.0
+                };
+                const mult = multipliers[fallFloorNum] || 0;
+                if (mult > 0) {
+                    const popup = document.createElement('div');
+                    popup.className = 'multiplier-popup';
+                    popup.textContent = mult + 'x';
+                    popup.style.left = coords.x + 'px';
+                    popup.style.top = (coords.y - 30) + 'px';
+                    document.getElementById('gameCanvasArea').appendChild(popup);
+                    setTimeout(() => popup.remove(), 1400);
+                }
+
+                pendingResult = { expectedOverlap, requiredOverlap, finalY };
+            }
+            draw();
+        }, 16);
+    }
+
+    async function processServerDrop(expectedOverlap, requiredOverlap, positionX) {
+        const floorNum = currentFloor + 1;
+
+        try {
+            const res = await apiCall('/api/spinix/drop', {
+                method: 'POST',
+                body: JSON.stringify({
+                    user_id: USER_ID,
+                    floor_number: floorNum,
+                    position_x: positionX,
+                    overlap_width: expectedOverlap,
+                    required_overlap: requiredOverlap
+                })
+            });
+
+            if (!res?.ok) {
+                showNotification('فشل إفلات الطابق', 'error');
+                isFalling = false;
+                waitingForLanding = false;
+                return;
+            }
+
+            const data = await res.json();
+
+            if (data.success) {
+                if (data.result === 'completed') {
+                    // أكمل البرج
+                    gameActive = false;
+                    const profit = data.profit || 0;
+                    userBalance += profit;
+                    showNotification(`🏆 أكملت البرج بالكامل! ربح ${profit.toFixed(2)} SYP 🏆`, 'complete');
+                    resetGameState();
+                    showBetSelection();
+                    document.getElementById('dropButton').disabled = true;
+                    document.getElementById('cashoutButton').disabled = true;
+                    updateUI();
+                    updateGameStatus('🏆 مكتمل!', 'info');
+                    await loadGameState();
+                    return;
+                } else if (data.result === 'continue') {
+                    // استمرار
+                    currentFloor = data.floor_number;
+                    pendingProfit = data.profit || 0;
+                    currentMultiplier = data.multiplier || 0;
+
+                    if (pendingResult) {
+                        let newYpos = pendingResult.finalY;
+                        builtFloors.push({
+                            x: fallPosX,
+                            y: newYpos,
+                            w: fallW,
+                            h: fallH,
+                            floorNumber: fallFloorNum
+                        });
+                        currentFloor = fallFloorNum;
+                        targetCameraY -= FLOOR_HEIGHT_INCREMENT;
+                        pivotOffsetY += FLOOR_HEIGHT_INCREMENT;
+                        updatePivotPosition();
+                    }
+
+                    isFalling = false;
+                    waitingForLanding = false;
+                    updateUI();
+                    updateGameStatus(`🎯 الطابق ${currentFloor + 1} · مضاعف ${(currentMultiplier || 0).toFixed(2)}x`, 'playing');
+                    draw();
+                    return;
+                }
+            } else {
+                // خسارة
+                gameActive = false;
+                const lostAmount = data.details?.lost_amount || 0;
+                showNotification(`💔 خسارة! ${data.message || 'انهار الطابق'} 💔`, 'error');
+                resetGameState();
+                showBetSelection();
+                document.getElementById('dropButton').disabled = true;
+                document.getElementById('cashoutButton').disabled = true;
+                updateUI();
+                updateGameStatus('💔 خسارة', 'error');
+                await loadGameState();
+                return;
+            }
+
+        } catch (error) {
+            console.error('Drop error:', error);
+            showNotification('خطأ في الاتصال', 'error');
+            isFalling = false;
+            waitingForLanding = false;
+        }
+
+        pendingResult = null;
+    }
+
+    // ================================================================
+    //                      جمع الأرباح (Cashout)
+    // ================================================================
+    async function cashout() {
+        if (isProcessingRequest || !gameActive || pendingProfit <= 0) {
+            showNotification('لا توجد أرباح لجمعها', 'warning');
+            return;
+        }
+
+        isProcessingRequest = true;
+        document.getElementById('cashoutButton').disabled = true;
+        document.getElementById('dropButton').disabled = true;
+
+        try {
+            const res = await apiCall('/api/spinix/cashout', {
+                method: 'POST',
+                body: JSON.stringify({ user_id: USER_ID })
+            });
+
+            if (!res?.ok) {
+                showNotification('فشل جمع الأرباح', 'error');
+                isProcessingRequest = false;
+                document.getElementById('cashoutButton').disabled = false;
+                document.getElementById('dropButton').disabled = false;
+                return;
+            }
+
+            const data = await res.json();
+            isProcessingRequest = false;
+
+            if (data.success) {
+                const profitAmount = data.profit || 0;
+                gameActive = false;
+                userBalance += profitAmount;
+                pendingProfit = 0;
+                currentFloor = 0;
+                currentMultiplier = 0;
+
+                showNotification(`💰 تم جمع ${Math.floor(profitAmount).toLocaleString()} SYP بنجاح! 💰`, 'cashout');
+
+                resetGameState();
+                showBetSelection();
+                document.getElementById('dropButton').disabled = true;
+                document.getElementById('cashoutButton').disabled = true;
+                updateUI();
+                updateGameStatus('💰 تم الجمع', 'info');
+                await loadGameState();
+            } else {
+                showNotification(data.error || 'فشل جمع الأرباح', 'error');
+                document.getElementById('cashoutButton').disabled = false;
+                document.getElementById('dropButton').disabled = false;
+            }
+
+        } catch (error) {
+            console.error('Cashout error:', error);
+            showNotification('خطأ في الاتصال', 'error');
+            isProcessingRequest = false;
+            document.getElementById('cashoutButton').disabled = false;
+            document.getElementById('dropButton').disabled = false;
+        }
+    }
+
+    // ================================================================
+    //                      إحصائيات الأدمن
+    // ================================================================
+    async function loadGameStatsForAdmin() {
+        const content = document.getElementById('statsContent');
+        content.innerHTML = '<div style="text-align:center;padding:20px;"><div class="spinner"></div><p style="color:rgba(255,255,255,0.3);font-size:13px;">جاري تحميل الإحصائيات...</p></div>';
+
+        try {
+            const res = await apiCall(`/api/spinix/admin/stats/summary?admin_id=${ADMIN_ID}`);
+            if (!res?.ok) {
+                content.innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;">⚠️ فشل تحميل الإحصائيات</div>';
+                return;
+            }
+
+            const data = await res.json();
+            if (!data.success) {
+                content.innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;">⚠️ ' + (data.error || 'فشل التحميل') + '</div>';
+                return;
+            }
+
+            const stats = data.stats;
+            const overall = stats.overall || {};
+
+            content.innerHTML = `
+                        <div class="stats-grid">
+                            <div class="stats-card">
+                                <div class="stats-card-icon">🎲</div>
+                                <div class="stats-card-value">${(overall.total_games || 0).toLocaleString()}</div>
+                                <div class="stats-card-label">إجمالي الألعاب</div>
+                            </div>
+                            <div class="stats-card">
+                                <div class="stats-card-icon">🏆</div>
+                                <div class="stats-card-value">${(overall.total_wins || 0).toLocaleString()}</div>
+                                <div class="stats-card-label">فوز كامل</div>
+                            </div>
+                            <div class="stats-card">
+                                <div class="stats-card-icon">💰</div>
+                                <div class="stats-card-value">${(overall.total_cashouts || 0).toLocaleString()}</div>
+                                <div class="stats-card-label">جمع أرباح</div>
+                            </div>
+                            <div class="stats-card">
+                                <div class="stats-card-icon">💔</div>
+                                <div class="stats-card-value">${(overall.total_losses || 0).toLocaleString()}</div>
+                                <div class="stats-card-label">خسائر</div>
+                            </div>
+                        </div>
+
+                        <div class="stats-section-title">💰 أرباح الموقع</div>
+                        <div class="stats-card" style="background:rgba(0,0,0,0.3);margin-bottom:16px;">
+                            <div class="platform-profit ${(overall.net_result || 0) >= 0 ? 'positive' : 'negative'}">
+                                ${Math.abs(overall.net_result || 0).toLocaleString()} SYP
+                            </div>
+                            <div class="stats-card-label">${(overall.net_result || 0) >= 0 ? '📈 ربح' : '📉 خسارة'}</div>
+                        </div>
+
+                        <div class="stats-section-title">📅 اليوم</div>
+                        <div class="stats-grid">
+                            <div class="stats-card">
+                                <div class="stats-card-value">${(stats.today?.games || 0).toLocaleString()}</div>
+                                <div class="stats-card-label">ألعاب</div>
+                            </div>
+                            <div class="stats-card">
+                                <div class="stats-card-value" style="color:${(stats.today?.net_result || 0) >= 0 ? '#2ecc71' : '#e74c3c'}">
+                                    ${Math.abs(stats.today?.net_result || 0).toLocaleString()}
+                                </div>
+                                <div class="stats-card-label">${(stats.today?.net_result || 0) >= 0 ? 'ربح' : 'خسارة'}</div>
+                            </div>
+                        </div>
+
+                        <div class="stats-section-title">📊 أفضل اللاعبين</div>
+                        ${(stats.top_players || []).slice(0, 5).map((p, i) => `
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:13px;">
+                                <span style="color:rgba(255,255,255,0.5);">#${i + 1} 🎮 ${p.user_id}</span>
+                                <span style="color:#FFD700;font-weight:700;">${(p.total_profit || 0).toFixed(2)} SYP</span>
+                            </div>
+                        `).join('') || '<div style="color:rgba(255,255,255,0.2);text-align:center;padding:10px;">لا توجد بيانات</div>'}
+                    `;
+
+        } catch (error) {
+            console.error('Stats error:', error);
+            content.innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;">⚠️ خطأ في تحميل الإحصائيات</div>';
+        }
+    }
+
+    function openStatsModal() {
+        const modal = document.getElementById('statsModal');
+        modal.classList.add('visible');
+        loadGameStatsForAdmin();
+    }
+
+    function closeStatsModal() {
+        const modal = document.getElementById('statsModal');
+        modal.classList.remove('visible');
+    }
+
+    // ================================================================
+    //                      تهيئة اللعبة
+    // ================================================================
+    async function initGame() {
+        // إنشاء النجوم
+        createStars();
+
+        // تهيئة الكانفاس
+        initCanvas();
+        resetGameState();
+
+        // تحميل الإعدادات
+        await loadGameSettings();
+
+        // التحقق من المستخدم
+        USER_ID = getUserId();
+        if (!USER_ID) {
+            document.getElementById('errorContainer').classList.add('show');
+            document.getElementById('gameWrapper').style.display = 'none';
+            return;
+        }
+
+        // إظهار اللعبة
+        document.getElementById('gameWrapper').style.display = 'flex';
+
+        // تحميل الحالة
+        await loadGameState();
+
+        // بدء حلقة الرسم
+        gameLoop();
+
+        // أحداث الأزرار
+        document.getElementById('startGameBtn').addEventListener('click', startGame);
+        document.getElementById('dropButton').addEventListener('click', attemptDrop);
+        document.getElementById('cashoutButton').addEventListener('click', cashout);
+        document.getElementById('teaserRefreshBtn').addEventListener('click', checkDepositStatus);
+        document.getElementById('refreshStatsBtn').addEventListener('click', loadGameStatsForAdmin);
+
+        // أحداث الإحصائيات
+        document.getElementById('adminStatsBtn').addEventListener('click', openStatsModal);
+        document.getElementById('closeStatsModal').addEventListener('click', closeStatsModal);
+        document.getElementById('statsModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('statsModal')) closeStatsModal();
+        });
+
+        // إظهار زر الإحصائيات للأدمن
+        if (USER_ID === ADMIN_ID) {
+            document.getElementById('adminStatsBtn').classList.remove('hidden');
+            isAdmin = true;
+        }
+
+        // تحديث الرهان في الواجهة
+        const betGrid = document.getElementById('betSelectionGrid');
+        betGrid.innerHTML = `
+                    <div class="bet-selection-chip selected" style="grid-column: span 3; font-size:22px; padding:18px;">
+                        💰 ${currentBet} SYP
+                    </div>
+                `;
+
+        // إخفاء شاشة التحميل
+        showLoading(false);
+        updateProgress(100, 'تم التحميل بنجاح!');
+
+        // التحقق من الإيداع بشكل دوري
+        setInterval(checkDepositStatus, 30000);
+    }
+
+    // ================================================================
+    //                      بدء التشغيل
+    // ================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        // تحديث شاشة التحميل
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += Math.random() * 8;
+            if (progress > 85) progress = 85;
+            updateProgress(Math.round(progress), 'جاري التحميل...');
+        }, 200);
+
+        // بدء التهيئة
+        setTimeout(async () => {
+            clearInterval(interval);
+            updateProgress(90, 'جاري تجهيز اللعبة...');
+            await new Promise(r => setTimeout(r, 400));
+
+            // التحقق من صورة الطوابق
+            if (!imageLoaded) {
+                await new Promise(r => setTimeout(r, 500));
+            }
+
+            await initGame();
+        }, 500);
+    });
+</script>
+
+</body>
+</html>

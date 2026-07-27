@@ -8,7 +8,7 @@ const port = process.env.PORT || 5000;
 // ================================================================
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     
     if (req.method === 'OPTIONS') {
@@ -42,7 +42,7 @@ const ADMIN_ID = 7011476249;
 let dbReady = false;
 
 // ================================================================
-//                      إنشاء الجداول
+//                      ===== جداول العجلة =====
 // ================================================================
 const TABLE_SCHEMAS = {
     wheel_prizes: `
@@ -124,90 +124,8 @@ const TABLE_SCHEMAS = {
     `
 };
 
-const DEFAULT_PRIZES = [
-    { name: '🎁 1000 SYP', description: 'الفوز بـ 1000 ليرة سورية', probability: 15, icon: '🎁', color: '#1a1a2e', color2: '#16213e' },
-    { name: '🎁 500 SYP', description: 'الفوز بـ 500 ليرة سورية', probability: 20, icon: '🎁', color: '#2d1b3d', color2: '#1a0a0a' },
-    { name: '🎁 200 SYP', description: 'الفوز بـ 200 ليرة سورية', probability: 30, icon: '🎁', color: '#0f3460', color2: '#1a1a2e' },
-    { name: '🎫 كود هدية', description: 'كود هدية بقيمة 50 SYP', probability: 10, icon: '🎫', color: '#1a2a1a', color2: '#0f1a0f' },
-    { name: '😅 حظ سعيد', description: 'لا يوجد فوز هذه المرة', probability: 20, icon: '😅', color: '#2a1a1a', color2: '#1a0a0a' },
-    { name: '⭐ 50 SYP', description: 'الفوز بـ 50 ليرة سورية', probability: 5, icon: '⭐', color: '#1a1a2a', color2: '#0f0f2a' }
-];
-
-const DEFAULT_SETTINGS = [
-    { key: 'spin_interval_hours', value: '24' },
-    { key: 'is_active', value: 'true' },
-    { key: 'deposit_required', value: 'false' },
-    { key: 'deposit_min_amount', value: '1000' },
-    { key: 'deposit_check_hours', value: '24' },
-    { key: 'center_icon', value: '⭐' },
-    { key: 'bg_image_url', value: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=1920&q=80' },
-    { key: 'loading_image_url', value: 'https://via.placeholder.com/200/1a1a2e/FFD700?text=🎡' },
-    { key: 'spin_duration', value: '3500' }
-];
-
 // ================================================================
-//                      تحديث هيكل الجدول
-// ================================================================
-async function updateTableSchema() {
-    const client = await pool.connect();
-    try {
-        console.log('📋 ===== التحقق من هيكل الجداول =====');
-        
-        const checkColumns = await client.query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'wheel_prizes' 
-            AND column_name IN ('color', 'color2')
-        `);
-        
-        const existingColumns = checkColumns.rows.map(row => row.column_name);
-        console.log('📋 الأعمدة الموجودة:', existingColumns);
-        
-        if (!existingColumns.includes('color')) {
-            console.log('➕ إضافة عمود color...');
-            await client.query(`
-                ALTER TABLE wheel_prizes 
-                ADD COLUMN color VARCHAR(50) DEFAULT '#1a1a2e'
-            `);
-            console.log('✅ تم إضافة عمود color');
-        }
-        
-        if (!existingColumns.includes('color2')) {
-            console.log('➕ إضافة عمود color2...');
-            await client.query(`
-                ALTER TABLE wheel_prizes 
-                ADD COLUMN color2 VARCHAR(50) DEFAULT '#16213e'
-            `);
-            console.log('✅ تم إضافة عمود color2');
-        }
-        
-        const checkUpdatedAt = await client.query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'wheel_prizes' 
-            AND column_name = 'updated_at'
-        `);
-        
-        if (checkUpdatedAt.rows.length === 0) {
-            console.log('➕ إضافة عمود updated_at...');
-            await client.query(`
-                ALTER TABLE wheel_prizes 
-                ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            `);
-            console.log('✅ تم إضافة عمود updated_at');
-        }
-        
-        console.log('✅ ===== هيكل الجدول محدث =====');
-        return true;
-    } catch (error) {
-        console.error('❌ خطأ في تحديث هيكل الجدول:', error);
-        return false;
-    } finally {
-        client.release();
-    }
-}
-// ================================================================
-//                      جداول SPINIX (أضف هذا بعد TABLE_SCHEMAS)
+//                      ===== جداول SPINIX =====
 // ================================================================
 const SPINIX_TABLES = {
     spinix_games: `
@@ -299,8 +217,30 @@ const SPINIX_TABLES = {
 };
 
 // ================================================================
-//                      البيانات الافتراضية لـ SPINIX
+//                      ===== البيانات الافتراضية =====
 // ================================================================
+
+const DEFAULT_PRIZES = [
+    { name: '🎁 1000 SYP', description: 'الفوز بـ 1000 ليرة سورية', probability: 15, icon: '🎁', color: '#1a1a2e', color2: '#16213e' },
+    { name: '🎁 500 SYP', description: 'الفوز بـ 500 ليرة سورية', probability: 20, icon: '🎁', color: '#2d1b3d', color2: '#1a0a0a' },
+    { name: '🎁 200 SYP', description: 'الفوز بـ 200 ليرة سورية', probability: 30, icon: '🎁', color: '#0f3460', color2: '#1a1a2e' },
+    { name: '🎫 كود هدية', description: 'كود هدية بقيمة 50 SYP', probability: 10, icon: '🎫', color: '#1a2a1a', color2: '#0f1a0f' },
+    { name: '😅 حظ سعيد', description: 'لا يوجد فوز هذه المرة', probability: 20, icon: '😅', color: '#2a1a1a', color2: '#1a0a0a' },
+    { name: '⭐ 50 SYP', description: 'الفوز بـ 50 ليرة سورية', probability: 5, icon: '⭐', color: '#1a1a2a', color2: '#0f0f2a' }
+];
+
+const DEFAULT_SETTINGS = [
+    { key: 'spin_interval_hours', value: '24' },
+    { key: 'is_active', value: 'true' },
+    { key: 'deposit_required', value: 'false' },
+    { key: 'deposit_min_amount', value: '1000' },
+    { key: 'deposit_check_hours', value: '24' },
+    { key: 'center_icon', value: '⭐' },
+    { key: 'bg_image_url', value: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=1920&q=80' },
+    { key: 'loading_image_url', value: 'https://via.placeholder.com/200/1a1a2e/FFD700?text=🎡' },
+    { key: 'spin_duration', value: '3500' }
+];
+
 const DEFAULT_SPINIX_SETTINGS = [
     { key: 'bet_amount', value: '1000' },
     { key: 'max_floors', value: '13' },
@@ -325,8 +265,72 @@ const DEFAULT_SPINIX_MULTIPLIERS = {
     6: 1.5, 7: 1.7, 8: 3.0, 9: 5.0, 10: 7.0,
     11: 9.0, 12: 11.0, 13: 15.0
 };
+
 // ================================================================
-//                      دوال SPINIX المساعدة
+//                      ===== دوال العجلة المساعدة =====
+// ================================================================
+
+async function updateTableSchema() {
+    const client = await pool.connect();
+    try {
+        console.log('📋 ===== التحقق من هيكل الجداول =====');
+        
+        const checkColumns = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'wheel_prizes' 
+            AND column_name IN ('color', 'color2')
+        `);
+        
+        const existingColumns = checkColumns.rows.map(row => row.column_name);
+        console.log('📋 الأعمدة الموجودة:', existingColumns);
+        
+        if (!existingColumns.includes('color')) {
+            console.log('➕ إضافة عمود color...');
+            await client.query(`
+                ALTER TABLE wheel_prizes 
+                ADD COLUMN color VARCHAR(50) DEFAULT '#1a1a2e'
+            `);
+            console.log('✅ تم إضافة عمود color');
+        }
+        
+        if (!existingColumns.includes('color2')) {
+            console.log('➕ إضافة عمود color2...');
+            await client.query(`
+                ALTER TABLE wheel_prizes 
+                ADD COLUMN color2 VARCHAR(50) DEFAULT '#16213e'
+            `);
+            console.log('✅ تم إضافة عمود color2');
+        }
+        
+        const checkUpdatedAt = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'wheel_prizes' 
+            AND column_name = 'updated_at'
+        `);
+        
+        if (checkUpdatedAt.rows.length === 0) {
+            console.log('➕ إضافة عمود updated_at...');
+            await client.query(`
+                ALTER TABLE wheel_prizes 
+                ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            `);
+            console.log('✅ تم إضافة عمود updated_at');
+        }
+        
+        console.log('✅ ===== هيكل الجدول محدث =====');
+        return true;
+    } catch (error) {
+        console.error('❌ خطأ في تحديث هيكل الجدول:', error);
+        return false;
+    } finally {
+        client.release();
+    }
+}
+
+// ================================================================
+//                      ===== دوال SPINIX المساعدة =====
 // ================================================================
 
 async function getSpinixSetting(key) {
@@ -500,8 +504,9 @@ async function recordSpinixGameResult(user_id, gameData, resultData) {
 async function resetSpinixDeposit(user_id) {
     console.log(`🔄 Reset deposit flag for user ${user_id}`);
 }
+
 // ================================================================
-//                      تهيئة قاعدة البيانات
+//                      ===== تهيئة قاعدة البيانات =====
 // ================================================================
 async function ensureTables() {
     console.log('\n📋 ===== فحص قاعدة البيانات =====');
@@ -509,6 +514,7 @@ async function ensureTables() {
     const client = await pool.connect();
 
     try {
+        // 1. إنشاء جداول العجلة
         for (const table of Object.keys(TABLE_SCHEMAS)) {
             try {
                 await client.query(TABLE_SCHEMAS[table]);
@@ -521,6 +527,7 @@ async function ensureTables() {
         
         await updateTableSchema();
 
+        // 2. إضافة الجوائز الافتراضية للعجلة
         const prizesCount = await client.query('SELECT COUNT(*) FROM wheel_prizes');
         if (parseInt(prizesCount.rows[0].count) === 0) {
             console.log('   ⚠️ لا توجد جوائز، جاري إضافة الجوائز الافتراضية...');
@@ -541,6 +548,7 @@ async function ensureTables() {
             `);
         }
 
+        // 3. إضافة إعدادات العجلة الافتراضية
         const settingsCount = await client.query('SELECT COUNT(*) FROM wheel_settings');
         if (parseInt(settingsCount.rows[0].count) === 0) {
             console.log('   ⚠️ لا توجد إعدادات، جاري إضافة الإعدادات الافتراضية...');
@@ -553,6 +561,7 @@ async function ensureTables() {
             console.log(`   ✅ تم إضافة ${DEFAULT_SETTINGS.length} إعداد افتراضي`);
         }
 
+        // 4. إضافة النص العلوي للعجلة
         const bannerCount = await client.query('SELECT COUNT(*) FROM wheel_banner');
         if (parseInt(bannerCount.rows[0].count) === 0) {
             await client.query(`
@@ -560,6 +569,38 @@ async function ensureTables() {
                 VALUES ($1)
             `, ['🎡 IChancy · عجلة الحظ']);
             console.log('   ✅ تم إضافة النص العلوي الافتراضي');
+        }
+
+        // ============================================================
+        // 5. إنشاء جداول SPINIX
+        // ============================================================
+        for (const table of Object.keys(SPINIX_TABLES)) {
+            try {
+                await client.query(SPINIX_TABLES[table]);
+                console.log(`   ✅ جدول ${table}: تم إنشاؤه/تأكيده`);
+            } catch (err) {
+                console.log(`   ❌ جدول ${table}: فشل - ${err.message}`);
+                return false;
+            }
+        }
+
+        // 6. إضافة إعدادات SPINIX الافتراضية
+        const spinixSettingsCount = await client.query('SELECT COUNT(*) FROM spinix_settings');
+        if (parseInt(spinixSettingsCount.rows[0].count) === 0) {
+            console.log('   ⚠️ لا توجد إعدادات لـ SPINIX، جاري الإضافة...');
+            for (const setting of DEFAULT_SPINIX_SETTINGS) {
+                await client.query(`
+                    INSERT INTO spinix_settings (setting_key, setting_value)
+                    VALUES ($1, $2)
+                `, [setting.key, setting.value]);
+            }
+            for (const [floor, multiplier] of Object.entries(DEFAULT_SPINIX_MULTIPLIERS)) {
+                await client.query(`
+                    INSERT INTO spinix_settings (setting_key, setting_value)
+                    VALUES ($1, $2)
+                `, [`multiplier_${floor}`, multiplier.toString()]);
+            }
+            console.log(`   ✅ تم إضافة ${DEFAULT_SPINIX_SETTINGS.length + Object.keys(DEFAULT_SPINIX_MULTIPLIERS).length} إعداد لـ SPINIX`);
         }
 
         console.log('\n✅ ===== قاعدة البيانات جاهزة! =====');
@@ -573,42 +614,11 @@ async function ensureTables() {
         client.release();
     }
 }
-// ============================================================
-// إنشاء جداول SPINIX
-// ============================================================
-for (const table of Object.keys(SPINIX_TABLES)) {
-    try {
-        await client.query(SPINIX_TABLES[table]);
-        console.log(`   ✅ جدول ${table}: تم إنشاؤه/تأكيده`);
-    } catch (err) {
-        console.log(`   ❌ جدول ${table}: فشل - ${err.message}`);
-        return false;
-    }
-}
 
-// إضافة إعدادات SPINIX الافتراضية
-const spinixSettingsCount = await client.query('SELECT COUNT(*) FROM spinix_settings');
-if (parseInt(spinixSettingsCount.rows[0].count) === 0) {
-    console.log('   ⚠️ لا توجد إعدادات لـ SPINIX، جاري الإضافة...');
-    for (const setting of DEFAULT_SPINIX_SETTINGS) {
-        await client.query(`
-            INSERT INTO spinix_settings (setting_key, setting_value)
-            VALUES ($1, $2)
-        `, [setting.key, setting.value]);
-    }
-    for (const [floor, multiplier] of Object.entries(DEFAULT_SPINIX_MULTIPLIERS)) {
-        await client.query(`
-            INSERT INTO spinix_settings (setting_key, setting_value)
-            VALUES ($1, $2)
-        `, [`multiplier_${floor}`, multiplier.toString()]);
-    }
-    console.log(`   ✅ تم إضافة ${DEFAULT_SPINIX_SETTINGS.length + Object.keys(DEFAULT_SPINIX_MULTIPLIERS).length} إعداد لـ SPINIX`);
-}
 // ================================================================
-//                      المسارات (API Endpoints)
+//                      ===== مسارات العجلة =====
 // ================================================================
 
-// -------------------- فحص الحالة --------------------
 app.get('/api/status', (req, res) => {
     res.json({
         status: 'running',
@@ -618,7 +628,6 @@ app.get('/api/status', (req, res) => {
     });
 });
 
-// -------------------- الصفحة الرئيسية --------------------
 app.get('/', (req, res) => {
     res.json({
         status: 'running',
@@ -642,7 +651,6 @@ app.get('/', (req, res) => {
     });
 });
 
-// -------------------- النص العلوي (Banner) --------------------
 app.get('/api/banner', async (req, res) => {
     try {
         const result = await pool.query('SELECT text FROM wheel_banner ORDER BY id DESC LIMIT 1');
@@ -686,7 +694,6 @@ app.put('/api/banner', async (req, res) => {
     }
 });
 
-// -------------------- الحصول على جميع الإعدادات --------------------
 app.get('/api/admin/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -721,7 +728,6 @@ app.get('/api/admin/settings', async (req, res) => {
     }
 });
 
-// -------------------- تحديث إعداد واحد --------------------
 app.put('/api/admin/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
 
@@ -771,7 +777,6 @@ app.put('/api/admin/setting', async (req, res) => {
     }
 });
 
-// -------------------- الحصول على الجوائز (للأدمن) --------------------
 app.get('/api/admin/prizes', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -802,7 +807,6 @@ app.get('/api/admin/prizes', async (req, res) => {
     }
 });
 
-// -------------------- الحصول على الجوائز النشطة (للعجلة) --------------------
 app.get('/api/prizes', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -823,7 +827,6 @@ app.get('/api/prizes', async (req, res) => {
     }
 });
 
-// -------------------- إضافة جائزة جديدة --------------------
 app.post('/api/admin/prizes', async (req, res) => {
     const { admin_id, name, description, probability, icon, color, color2 } = req.body;
 
@@ -866,7 +869,6 @@ app.post('/api/admin/prizes', async (req, res) => {
     }
 });
 
-// -------------------- تحديث جائزة (مع دعم الألوان والنسبة) --------------------
 app.put('/api/admin/prizes/:prize_id', async (req, res) => {
     const { prize_id } = req.params;
     const { admin_id, name, description, probability, icon, color, color2, is_active } = req.body;
@@ -957,7 +959,6 @@ app.put('/api/admin/prizes/:prize_id', async (req, res) => {
     }
 });
 
-// -------------------- حذف جائزة --------------------
 app.delete('/api/admin/prizes/:prize_id', async (req, res) => {
     const { prize_id } = req.params;
     const { admin_id } = req.body;
@@ -1004,7 +1005,6 @@ app.delete('/api/admin/prizes/:prize_id', async (req, res) => {
     }
 });
 
-// -------------------- إعادة تعيين الجوائز --------------------
 app.post('/api/admin/seed-prizes', async (req, res) => {
     const { admin_id } = req.body;
 
@@ -1041,7 +1041,6 @@ app.post('/api/admin/seed-prizes', async (req, res) => {
     }
 });
 
-// -------------------- إعادة تعيين التدويرات (بدون كاش) --------------------
 app.post('/api/admin/reset-spins', async (req, res) => {
     const { admin_id, user_id } = req.body;
 
@@ -1087,7 +1086,6 @@ app.post('/api/admin/reset-spins', async (req, res) => {
     }
 });
 
-// -------------------- تدوير العجلة --------------------
 app.post('/api/wheel/spin', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1108,7 +1106,6 @@ app.post('/api/wheel/spin', async (req, res) => {
     try {
         console.log(`🎡 Spin request for user: ${user_id}`);
 
-        // 1. التحقق من تفعيل العجلة
         const isActive = await pool.query(
             'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
             ['is_active']
@@ -1120,7 +1117,6 @@ app.post('/api/wheel/spin', async (req, res) => {
             });
         }
 
-        // 2. التحقق من شرط الإيداع
         const depositRequired = await pool.query(
             'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
             ['deposit_required']
@@ -1163,7 +1159,6 @@ app.post('/api/wheel/spin', async (req, res) => {
             }
         }
 
-        // 3. التحقق من آخر تدوير
         const intervalHours = await pool.query(
             'SELECT setting_value FROM wheel_settings WHERE setting_key = $1',
             ['spin_interval_hours']
@@ -1199,7 +1194,6 @@ app.post('/api/wheel/spin', async (req, res) => {
             console.log(`👤 User ${user_id} has no previous spins`);
         }
 
-        // 4. اختيار جائزة
         const prizes = await pool.query(`
             SELECT * FROM wheel_prizes 
             WHERE is_active = true
@@ -1226,7 +1220,6 @@ app.post('/api/wheel/spin', async (req, res) => {
 
         console.log(`🎯 Selected prize: ${selectedPrize.name} (${selectedPrize.probability}%)`);
 
-        // 5. تسجيل التدوير
         const result = await pool.query(`
             INSERT INTO wheel_spins (user_id, prize_id, prize_name, is_claimed)
             VALUES ($1, $2, $3, FALSE)
@@ -1235,7 +1228,6 @@ app.post('/api/wheel/spin', async (req, res) => {
 
         console.log(`✅ Spin recorded: ID=${result.rows[0].id}, User=${user_id}, Prize=${selectedPrize.name}`);
 
-        // 6. إحصائيات المستخدم
         const userStats = await pool.query(`
             SELECT 
                 COUNT(*) as total_spins,
@@ -1266,7 +1258,6 @@ app.post('/api/wheel/spin', async (req, res) => {
     }
 });
 
-// -------------------- سجل المستخدم --------------------
 app.get('/api/wheel/history/:user_id', async (req, res) => {
     const { user_id } = req.params;
 
@@ -1378,11 +1369,11 @@ app.get('/api/wheel/history/:user_id', async (req, res) => {
         });
     }
 });
+
 // ================================================================
 //                      ===== مسارات SPINIX =====
 // ================================================================
 
-// ----- حالة اللعبة -----
 app.get('/api/spinix/status', async (req, res) => {
     const { user_id } = req.query;
     
@@ -1464,7 +1455,6 @@ app.get('/api/spinix/status', async (req, res) => {
     }
 });
 
-// ----- بدء جولة جديدة -----
 app.post('/api/spinix/start', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1546,7 +1536,6 @@ app.post('/api/spinix/start', async (req, res) => {
     }
 });
 
-// ----- تنفيذ رمي على طابق -----
 app.post('/api/spinix/drop', async (req, res) => {
     const { user_id, floor_number, position_x, overlap_width, required_overlap } = req.body;
 
@@ -1698,7 +1687,6 @@ app.post('/api/spinix/drop', async (req, res) => {
     }
 });
 
-// ----- جمع الأرباح -----
 app.post('/api/spinix/cashout', async (req, res) => {
     const { user_id } = req.body;
 
@@ -1791,7 +1779,6 @@ app.post('/api/spinix/cashout', async (req, res) => {
     }
 });
 
-// ----- سجل المستخدم -----
 app.get('/api/spinix/history/:user_id', async (req, res) => {
     const { user_id } = req.params;
     const { limit, offset } = req.query;
@@ -1860,7 +1847,6 @@ app.get('/api/spinix/history/:user_id', async (req, res) => {
     }
 });
 
-// ----- تفاصيل جولة محددة -----
 app.get('/api/spinix/game/:game_id', async (req, res) => {
     const { game_id } = req.params;
 
@@ -1924,7 +1910,6 @@ app.get('/api/spinix/game/:game_id', async (req, res) => {
 //                      ===== إدارة SPINIX =====
 // ================================================================
 
-// ----- عرض الإعدادات والمضاعفات -----
 app.get('/api/spinix/admin/settings', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -1963,7 +1948,6 @@ app.get('/api/spinix/admin/settings', async (req, res) => {
     }
 });
 
-// ----- تحديث إعداد -----
 app.put('/api/spinix/admin/setting', async (req, res) => {
     const { admin_id, key, value } = req.body;
 
@@ -2002,7 +1986,6 @@ app.put('/api/spinix/admin/setting', async (req, res) => {
     }
 });
 
-// ----- تحديث المضاعفات -----
 app.put('/api/spinix/admin/multipliers', async (req, res) => {
     const { admin_id, multipliers } = req.body;
 
@@ -2066,7 +2049,6 @@ app.put('/api/spinix/admin/multipliers', async (req, res) => {
     }
 });
 
-// ----- إحصائيات تفصيلية -----
 app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
     const { admin_id, period, limit, offset, user_id } = req.query;
 
@@ -2224,7 +2206,6 @@ app.get('/api/spinix/admin/stats/detailed', async (req, res) => {
     }
 });
 
-// ----- ملخص الإحصائيات -----
 app.get('/api/spinix/admin/stats/summary', async (req, res) => {
     const { admin_id } = req.query;
 
@@ -2349,7 +2330,6 @@ app.get('/api/spinix/admin/stats/summary', async (req, res) => {
     }
 });
 
-// ----- إحصائيات أسبوعية -----
 app.get('/api/spinix/admin/stats/weekly', async (req, res) => {
     const { admin_id, weeks } = req.query;
 
@@ -2408,7 +2388,6 @@ app.get('/api/spinix/admin/stats/weekly', async (req, res) => {
     }
 });
 
-// ----- تصدير البيانات -----
 app.get('/api/spinix/admin/export', async (req, res) => {
     const { admin_id, format, start_date, end_date } = req.query;
 
@@ -2481,9 +2460,11 @@ app.get('/api/spinix/admin/export', async (req, res) => {
         });
     }
 });
+
 // ================================================================
-//                      تشغيل الخادم
+//                      ===== تشغيل الخادم =====
 // ================================================================
+
 async function startServer() {
     console.log('\n🚀 ===== بدء تشغيل الخادم =====');
     console.log(`📡 المنفذ: ${port}`);
@@ -2496,7 +2477,11 @@ async function startServer() {
         console.log(`\n✅ الخادم يعمل على المنفذ ${port}`);
         console.log(`🔗 فحص الحالة: http://localhost:${port}/api/status`);
         console.log(`🔗 الجوائز النشطة: http://localhost:${port}/api/prizes`);
-        console.log(`🔗 لوحة الإدارة: http://localhost:${port}/api/admin/prizes?admin_id=${ADMIN_ID}`);
+        console.log(`🔗 لوحة إدارة العجلة: http://localhost:${port}/api/admin/prizes?admin_id=${ADMIN_ID}`);
+        console.log(`\n🎮 SPINIX:`);
+        console.log(`   🔗 الحالة: http://localhost:${port}/api/spinix/status?user_id=123`);
+        console.log(`   🔗 بدء جولة: POST http://localhost:${port}/api/spinix/start`);
+        console.log(`   🔗 إدارة SPINIX: http://localhost:${port}/api/spinix/admin/settings?admin_id=${ADMIN_ID}`);
         console.log('\n📋 ===== جاهز! =====\n');
     });
 }
